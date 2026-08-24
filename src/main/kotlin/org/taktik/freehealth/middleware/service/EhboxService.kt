@@ -49,6 +49,7 @@ interface EhboxService {
         passPhrase: String,
         boxId: String,
         limit: Int?,
+        skip: Int = 0,
         alternateKeystores: List<AltKeystore>? = null
                     ): MessagesResponse
     fun moveMessages(

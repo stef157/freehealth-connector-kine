@@ -234,6 +234,7 @@ class EhboxServiceImpl(private val stsService: STSService, keyDepotService: KeyD
         passPhrase: String,
         boxId: String,
         limit: Int?,
+        skip: Int,
         alternateKeystores: List<AltKeystore>?
                              ): MessagesResponse {
         val samlToken = stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
@@ -241,8 +242,8 @@ class EhboxServiceImpl(private val stsService: STSService, keyDepotService: KeyD
         val messagesListRequest = GetMessagesListRequest()
 
         messagesListRequest.source = boxId
-        messagesListRequest.startIndex = 1
-        messagesListRequest.endIndex = 100
+        messagesListRequest.startIndex = skip + 1
+        messagesListRequest.endIndex = skip + 100
 
         val result = mutableListOf<Message>()
         var status: StatusType?

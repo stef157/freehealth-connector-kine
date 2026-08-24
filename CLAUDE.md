@@ -257,10 +257,22 @@ just a URL change. The port is small and every ingredient is already here (measu
 | v1 SOAP action | `/eAgreement/v2` | `SOA-03004` WS-I compliance failure |
 | **v2 SOAP action** | `/eAgreement/v2` | **`SOA-01002` not authorized** |
 
-`SOA-03004` is gone, so the v2 message is now accepted as conformant — the remaining `SOA-01002`
-(`Origin: Consumer`, `Environment: Acceptation`) is an **authorisation** matter, not a code one: the licence is not
-activated for eAgreement v2 in acceptance. Ask the CIN to enable it; nothing further can be tested until then, which
-also means the FHIR payloads remain unvalidated against the v2 contract.
+`SOA-03004` is gone, so the v2 message is accepted as conformant. One more fix was needed: mycarenet commons v4 adds a
+mandatory `MessageVersion` attribute on the Detail element which the v4 `BlobMapper` never copied — without it the
+service answers `INVALID_DETAIL_REQUEST: messageVersion invalid (mandatory)`. eAgreement sets it to `V4`
+(`EagreementServiceImpl.MESSAGE_VERSION`), the value the CIN message definition mandates.
+
+**askAgreement then completes end to end**: HTTP 200, `acknowledged: true`, a NIP reference in `commonOutput`, and a
+signed FHIR `be-eagreementdemandreply` from the insurer. No decision comes back synchronously — per the CIN scenarios
+the medical adviser's ruling arrives over the async channel, which is still the second batch of work.
+
+Two things remain:
+
+- `consultAgreement` still answers `SOA-01002` while `askAgreement` succeeds, so **authorisation is granted per
+  operation**: ask the CIN to enable ConsultAgreement for the licence.
+- The insurer returns one FHIR *warning* on the request bundle: `MessageHeader.sender` references
+  `PractitionerRole/PractitionerRole1` while that entry's `fullUrl` is a random `urn:uuid:…`, which breaks Bundle
+  resolution rules. It does not block the request but should be fixed in `EagreementServiceUtilsImpl`.
 
 The **async** channel is a separate second batch: the CIN scenarios have the medical adviser's decisions arriving
 asynchronously, FHC points at `genericasync.eagreement.v1`, and the official packaging ships a distinct

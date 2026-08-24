@@ -66,7 +66,10 @@ Consequence: **red tests do not imply a regression.** Compare against a baseline
 `build/test-results/test/*.xml` into a sorted `PASS/FAIL/ERROR/SKIP` list per branch for diffing.
 
 The genuinely offline tests are the ones under `service/impl/` that build and validate payloads
-(`CreatePrescriptionTest`, `InferPrescTypeTest`, `EagreementServiceUtilsTest`, `ValidatorTest`, …).
+(`CreatePrescriptionTest`, `InferPrescTypeTest`, `EagreementServiceUtilsTest`, `ValidatorTest`, …), plus
+`AddressbookControllerOfflineTest`, which boots the app and hits `/ab/search/hcp` and `/v2/api-docs` — the criteria
+are validated before any eHealth call, so fake auth headers are enough and no keystore or network is needed. That
+one runs in ~30 s and is the quickest way to check the app still boots.
 
 ## Architecture
 
@@ -305,6 +308,39 @@ Both work out of the box with a physiotherapist token, no special configuration:
   (`PHYSIOTHERAPIST`, authentic source `EHP`) and, keyed by NIHII, their `ehealthBoxes` entry — that is how you resolve
   a colleague's eHealthBox address before sending. `GET /ab/search/hcp/{lastName}` returns `[]` for acceptance test
   practitioners: they are not in the search index, so do not read an empty list as a failure.
+- `GET /ab/search/hcp` is the broad search: every criterion is a query parameter and all are optional —
+  `lastName`, `firstName`, `profession`, `nihii`, `ssin`, `zipCode`, `city`, `email`, `offset`, `limit`. The eHealth
+  XSD declares `NIHII|SSIN` and `City|ZipCode` as `xs:choice`, so each pair is mutually exclusive (400 otherwise), and
+  only the empty query is rejected — beyond that **the eHealth service decides**, see the table below. Omitting
+  `profession` (or passing `ALL`) leaves the element out — the older `GET /ab/search/hcp/{lastName}` silently defaults
+  it to `PHYSICIAN`. Names accept a `*` wildcard (`Steeman*`). The search response carries identity,
+  `nihii`, `professionCodes` and `speciality` only — **no address and no eHealthBox**: `SearchProfessionalsResponse`
+  returns `aa:HealthCareProfessional`, which has no address. Resolve those with `GET /ab/hcp/nihii/{nihii}` once the
+  user picks a result.
+- **What the addressbook actually accepts** (measured on acceptance with a physiotherapist token, 2026-08-24 — the
+  XSD makes everything optional, the service does not). A refusal surfaces as
+  `Requester - This combination of search criteria is not supported.`:
+
+  The rule is `profession` **plus** either a name or a location, or else an identifier on its own:
+
+  | criteria | result |
+  |---|---|
+  | `lastName` (+ `firstName`) + `profession` | OK |
+  | `profession` + `zipCode` or + `city` | OK |
+  | `nihii` alone, `ssin` alone | OK |
+  | `profession` alone | refused |
+  | `lastName` alone, `zipCode` alone (no profession) | refused |
+  | name **and** location together | refused |
+  | `firstName` without `lastName` | refused |
+  | `email` | refused |
+
+  So "search by name anywhere" and "search by zip code across professions" both need one call **per profession**;
+  valid profession codes are `PHYSICIAN`, `DENTIST`, `PHARMACIST`, `PHYSIOTHERAPIST`, `NURSE`, `MIDWIFE`,
+  `AUDIOLOGIST`, `DIETICIAN`, `LOGOPEDIST`, `ORTHOPEDIST`, `ORTHOPTIST`, `PODOLOGIST`, `PSYCHOLOGIST` — the eHealthBox
+  `QualityType` list also holds `AUDICIEN`, `PRACTICALNURSE`, `OPTICIEN`, `LABO`, which the addressbook refuses.
+  `maxElements` is capped at **100** (`The maxElements paging attribute is too high.` above that) and the protocol
+  returns **no total**, so page with `offset` until a page holds fewer than `limit` rows (1150 has 311
+  physiotherapists over 4 pages).
 - `GET /ehboxV3` returns the box summary (`boxId`, `quality`, `nbrMessagesInStandBy`, `currentSize`/`maxSize`);
   `GET /ehboxV3/{boxId}?limit=n` lists messages, with `boxId` one of `INBOX`, `SENTBOX`, `BININBOX`. Errors surface in
   the response's own `error` field rather than as an HTTP status.
@@ -341,4 +377,10 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   version — check which one the caller uses before touching all of them.
 - JSON dates are serialized as `yyyyMMdd` / `yyyyMMddHHmmss` **numbers** (`MapperConfiguration.kt`), not ISO strings.
 - `genJaxb` exists in `build.gradle` but is dormant (its dependencies are commented out); JAXB classes are committed.
+- Swagger 2 / springfox: only some controllers are annotated (`Addressbook`, `Hub`, `STS`, `Eagreement`, `Dmg`,
+  `Crypto`), with `@ApiOperation(value, notes)` on the method and `@ApiParam` on each parameter. **`@ApiParam`
+  defaults `required` to `false` and springfox lets that override what Spring deduced**, so a mandatory
+  `@RequestHeader` or `@PathVariable` that carries a bare `@ApiParam("…")` is published as optional — pass
+  `required = true` explicitly (`HubController` still shows the wrong behaviour). New paths must also match the
+  regex in `SwaggerConfiguration.kt` or they never appear in the descriptor.
 - Licensed under AGPL v3; keep the existing file headers.

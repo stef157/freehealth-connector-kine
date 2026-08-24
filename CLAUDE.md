@@ -143,7 +143,11 @@ docker run -d --name fhc -p 8090:8090 -v fhc-ehealth:/opt/ehealth -v fhc-tmp:/tm
 `fhc-tmp` matters: the connector caches the BCP endpoint list and TSL state in `/tmp`
 (`…bcp.EndpointUpdater.xml`, `…tsl.TrustStoreUpdater.properties`), and the Dockerfile otherwise mounts an anonymous
 volume there that is discarded on every run. With it persisted, the second startup no longer logs
-`Unable to load endpoints`. It boots in ~28 s and `/actuator/health` returns `{"status":"UP"}`.
+`Unable to load endpoints`. It boots in ~28 s and `/actuator/health` returns `{"status":"UP"}` with, for each
+indicator, a `details` block: `uptime` (`UptimeHealthIndicator` — JVM uptime, human readable and in millis, plus the
+start time), `diskSpace` and `db`. That nesting comes from `management.endpoint.health.show-details=always`; drop the
+property and the answer collapses back to the bare status. `/actuator/**` is `permitAll`, so those details are
+unauthenticated.
 
 Spring-side config is `src/main/resources/application.properties` (port 8090, `spring.application.name=fhc`) plus
 `icure.hazelcast.*` and CouchDB properties for the admin/login side.

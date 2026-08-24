@@ -247,10 +247,20 @@ just a URL change. The port is small and every ingredient is already here (measu
   files as the template. Official package name is `be.fgov.ehealth.mycarenet.agreement.protocol.v2` (note: v1 here
   lives under `be.fgov.ehealth.agreement.protocol.v1`, without `mycarenet`).
 
-Two unknowns remain, neither answerable from the code: whether the licence is **authorised** for v2 in acceptance (the
-observed `SOA-01002` was on v1; `SOA-03004` on v2 is a conformance rejection that likely precedes the authorisation
-check), and whether the FHIR payloads already satisfy the v2 contract — the transport never got far enough to tell.
-Ask the CIN to confirm v2 activation in parallel with the port.
+**The port is done** (`org.taktik.connector.business.agreementv2`, JAXB wrappers under
+`be.fgov.ehealth.mycarenet.agreement.protocol.v2`, `EagreementServiceImpl` routed to it). Measured result on
+`consultList` against acceptance:
+
+| binding sent | endpoint | answer |
+|---|---|---|
+| v1 SOAP action | `/eAgreement/v1` | `SOA-01002` not authorized |
+| v1 SOAP action | `/eAgreement/v2` | `SOA-03004` WS-I compliance failure |
+| **v2 SOAP action** | `/eAgreement/v2` | **`SOA-01002` not authorized** |
+
+`SOA-03004` is gone, so the v2 message is now accepted as conformant — the remaining `SOA-01002`
+(`Origin: Consumer`, `Environment: Acceptation`) is an **authorisation** matter, not a code one: the licence is not
+activated for eAgreement v2 in acceptance. Ask the CIN to enable it; nothing further can be tested until then, which
+also means the FHIR payloads remain unvalidated against the v2 contract.
 
 The **async** channel is a separate second batch: the CIN scenarios have the medical adviser's decisions arriving
 asynchronously, FHC points at `genericasync.eagreement.v1`, and the official packaging ships a distinct

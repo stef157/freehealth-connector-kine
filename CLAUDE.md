@@ -224,6 +224,44 @@ profession may read; for insurability that is:
 This returns `Success` with the `patientData`, `period` (CT1/CT2, mutuality, registrationNumber) and `payment`
 assertions. Verified against scenario 1 of the CIN test procedure.
 
+Two traps when reading an MDA failure:
+
+- **Facet ids must be the full URN.** `MemberDataServiceImpl.kt:814` is `facets ?: listOf(defaults)` — a client-supplied
+  facet id goes into the `AttributeQuery` verbatim, with no prefixing. Sending `"insurability"` instead of
+  `urn:be:cin:nippin:insurability` gets the whole query rejected.
+- **Read `detailCode`, never `msgFr`.** The error text is rendered locally from `be/errors/MemberDataErrors.json`
+  against the `detailCode` MyCareNet returned, and that catalogue is a translation of the CIN table, not the CIN's own
+  words — upstream, uid 23 (`UNKNOWN_FACET`, *"A requested facet does not exist"*) carries a French message
+  copy-pasted from uid 25 (`UNAUTHORIZED_FACET`), so an unknown facet reads as an access-rights refusal and the only
+  tell is the article. That one entry is fixed here, but the same class of mistranslation may sit in the others.
+  `MycarenetError` also carries `path` — indexed per facet and per dimension, e.g.
+  `Facet[urn:be:cin:nippin:insurability]/Dimension[requestType]` — and `value`, which `extractError` fills with the
+  offending node from your own request (`MemberDataServiceImpl.kt:912`). Those name what the message never does.
+
+`requestType` and `hcpQuality` do not affect this. The `requestType` query parameter is only consumed by the default
+facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`
+(`buildOriginType`, line 533), never into the `AttributeQuery`, which identifies the practitioner solely through
+`issuer` = `urn:be:cin:nippin:nihii11` + the NIHII padded to 11 digits.
+
+**The coverage window is `date` / `endDate`, in epoch milliseconds.** Unlike `requestType`, those two query parameters
+are honoured whether the facets come from the body or from the defaults: `getAttrQuery` always writes them to
+`Subject/SubjectConfirmation/SubjectConfirmationData/@NotBefore` and `@NotOnOrAfter`
+(`MemberDataServiceImpl.kt:862-872`) — the XPath the catalogue indexes uid 53 to 59 on. There is no facet `Dimension`
+for the period.
+
+The trap is the unit. `MemberDataController.kt:71` does `Instant.ofEpochMilli(date)`, on all six MDA routes — while
+eAttest v3 takes `yyyyMMddHHmmss` and `MapperConfiguration` serializes JSON dates as `yyyyMMdd` numbers. So a
+`yyyyMMdd` value lands ~20 million ms after the epoch, i.e. **1970-01-01**: `date=20210101` returns
+`PERIOD_TOO_FAR_IN_PAST` (uid 59, *"Request more than 5 years in the past"*) and `date=20260801&endDate=20260831` asks
+for a **30 ms** window in 1970, answering `Success` with zero assertions and no error at all. Pass real millis
+(`2021-08-25` = `1629849600000`), and pass **both**: the `endDate` default is `truncate(startDate to day) + 1 day`
+(line 83), so a lone `date` five years back asks for one day five years ago, not the last five years.
+
+The bounds come back on the same assertions, as `Assertion/Conditions/@NotBefore` / `@NotOnOrAfter` — no extra facet.
+Two `Success` / `PartialAnswer` warnings matter once the window widens and must not be read as plain success: uid 96
+`ONLY_FIVE_PERIODS_RETURNED` (more than five insurability periods exist, five were returned) and uid 68 `MUTATION`
+(the member changed mutuality during the window).
+
 Test data for physiotherapists lives in the CIN test procedure PDFs (scenario 8 is the nominal accepted case:
 NISS2 + accord REF2 + codes `567011` and `567033`).
 

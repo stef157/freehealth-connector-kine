@@ -50,7 +50,7 @@ class EfactFlatcoreOfflineTest {
 
     private val agreementNumber = "30600000000000000103"
 
-    /** readType 1 / deviceType 1: an eID chip reading. ET 52 Z 9 and Z 10, which annexe 26.4 always requires. */
+    /** readType 1 / deviceType 1: an eID chip reading, which fills ET 52 Z 9 and Z 10. */
     private val eidItem = """
         "eidItem": { "readDate": 20260729000000, "readHour": 1030, "readValue": "5910212346",
                      "readType": "1", "deviceType": "1", "vignetteReason": 0, "justificationDocumentNumber": 1 }
@@ -104,15 +104,19 @@ class EfactFlatcoreOfflineTest {
     }
 
     /**
-     * Annexe 26.4 makes ET 52 Z 9 and Z 10 mandatory with no exception clause, so a physiotherapy batch cannot carry
-     * the agreement number alone. The 400 body must name the rule and must not echo the number back.
+     * The batch a physiotherapy practice really composes: an agreement number and no card reading. The zone
+     * descriptions ET 52 ZONE 9 (p. 543) and ZONE 10 (p. 544) make those zones "facultative jusqu'a ce que la
+     * verification de l'identite du patient par lecture du document d'identite devienne obligatoire", so the
+     * record is written and the two zones stay blank. This test replaces the one that locked the 400.
      */
     @Test
-    fun anAgreementNumberWithoutEidIsRefusedWithoutEchoingTheNumber() {
-        val response = post(batch(""", "agreementNumber": "$agreementNumber""""))
+    fun anAgreementNumberAloneEmitsARecord52ForAPhysiotherapist() {
+        val records = flatcore(batch(""", "agreementNumber": "$agreementNumber""""))
 
-        assertThat(response.statusCode.value()).isEqualTo(400)
-        assertThat(response.body).contains("annexe 26.4").doesNotContain(agreementNumber)
+        assertThat(records.map { it.take(2) }).containsExactly("10", "20", "50", "52", "80", "90")
+        val record52 = records.single { it.startsWith("52") }
+        assertThat(record52.substring(131, 151)).isEqualTo(agreementNumber)
+        assertThat(record52.substring(48, 50)).isEqualTo("  ")   // Z 9 and Z 10, 1 A each, at their default
     }
 
     @Test

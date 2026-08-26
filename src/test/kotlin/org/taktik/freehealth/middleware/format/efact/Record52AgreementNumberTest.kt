@@ -34,17 +34,25 @@ import java.math.BigInteger
  * ET 52 Z 19, the agreement number — offline, no eHealth call.
  *
  * Normative source: INAMI *instructions de facturation electronique*, annexe 6.8 (EDITION 2021), which places
- * `19  20 A  132-151  Numero d'accord` in the type 52 record, and annexe 26.4 (kinesitherapeutes, MISE A JOUR
- * 2021/33, publication 23-06-2026), titled "Enregistrement de type 52 (facultatif, sauf zone 19)", which marks
+ * `19  20 A  132-151  Numero d'accord` in the type 52 record, and annexe 26.4 (kinesitherapeutes, p. 204, MISE A JOUR
+ * 2021/9, publication 28-06-2022), titled "Enregistrement de type 52 (facultatif, sauf zone 19)", which marks
  * Z 19 "obligation de completer". The zone detail sheet adds: "le numero d'accord, recu via eAgreement, doit etre
  * complete", structure XXXYYYYYYYYYYYYYYYDD, and footnote (4) "a partir du 01/05/22, cette zone doit
  * obligatoirement etre completee par les kinesitherapeutes". Annexe 7 point f lists ET 52 Z 19 among the
  * alphanumerical zones that must be filled with zeroes when unused.
  *
  * The same annexe 26.4 also marks "Z 9 Type de saisie document identite" and "Z 10 Type de support document
- * identite" as "Obligation de completer" with no exception clause — where Z 6a/6b and Z 12/13 carry "sauf lorsque
- * Z 9 = 4 et Z 3 = 3" and Z 16 carries "sauf lorsque Z 10 = 7, 8 ou 9". A physiotherapist therefore cannot send
- * Z 19 without the identity document capture, and the writer refuses that combination.
+ * identite" as "Obligation de completer". That column is qualified by the zone descriptions, which is why an
+ * agreement number alone is written rather than refused: ET 52 ZONE 9 (p. 543, 1 A - 49) and ZONE 10 (p. 544,
+ * 1 A - 50) both open with "Zone facultative jusqu'a ce que la verification de l'identite du patient par lecture du
+ * document d'identite devienne obligatoire. Pour les praticiens de l'art infirmier, l'obligation entrera en vigueur
+ * le 1/10/2017." Nursing is the only profession given a date; both pages carry MISE A JOUR 2021/32, publication
+ * 28-04-2026, later than annexe 26.4 itself (p. 204, MISE A JOUR 2021/9, publication 28-06-2022). Eight of the
+ * seventeen ET 52 zone descriptions carry that clause — Z 3, 6a-6b, 9, 10, 11, 12-13, 16, 17, every identity
+ * capture zone — and Z 19 is the only non structural zone without it, which is what the annexe title says.
+ *
+ * The reference above to annexe 26.4 as "MISE A JOUR 2021/33, publication 23-06-2026" was wrong: 2021/33 is the
+ * marker of the compiled document ("MISE A JOUR 2021/33 INCLUSE", cover page), not of that page.
  */
 class Record52AgreementNumberTest {
     private val agreementNumber = "30600000000000000103"
@@ -134,19 +142,25 @@ class Record52AgreementNumberTest {
         assertThat(zone19(record)).isEqualTo(agreementNumber)
     }
 
-    // annexe 26.4 makes Z 9 and Z 10 unconditional, so a physiotherapist cannot send Z 19 without an eID capture
+    // The zone descriptions make Z 9 and Z 10 "facultative jusqu'a ce que la verification de l'identite ... devienne
+    // obligatoire" (p. 543, p. 544), so a physiotherapist sends Z 19 with or without an eID capture. This test
+    // replaces the one that locked the opposite: it asserted a refusal that contradicted the source.
     @Test
-    fun agreementNumberWithoutEidIsRefusedForAPhysiotherapist() {
-        assertThatThrownBy { write(item().apply { agreementNumber = this@Record52AgreementNumberTest.agreementNumber }) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("annexe 26.4")
-            .hasMessageContaining("Z 9")
-            .hasMessageContaining("Z 10")
+    fun agreementNumberWithoutEidIsWrittenForAPhysiotherapist() {
+        val record = write(item().apply { agreementNumber = this@Record52AgreementNumberTest.agreementNumber })
+
+        assertWellFormed(record)
+        assertThat(zone19(record)).isEqualTo(agreementNumber)
+        // the two zones that used to gate this record stay at their default: 1 A, so a blank. Nothing is invented.
+        assertThat(record.substring(48, 49)).isEqualTo(" ")   // Z 9,  1 A - 49
+        assertThat(record.substring(49, 50)).isEqualTo(" ")   // Z 10, 1 A - 50
     }
 
-    // ... and no other sector is affected: the refusal is keyed on ET 10 Z 18 alone
+    // ... and the record does not depend on the sector at all: the profession code reaches ET 10 Z 18, not this one
     @Test
-    fun agreementNumberWithoutEidStillWritesForOtherProfessions() {
+    fun agreementNumberWithoutEidWritesTheSameRecordForEveryProfession() {
+        val kine = write(item().apply { agreementNumber = this@Record52AgreementNumberTest.agreementNumber })
+
         listOf(null, 30).forEach { professionCode ->
             val record = write(
                 item().apply { agreementNumber = this@Record52AgreementNumberTest.agreementNumber },
@@ -154,6 +168,7 @@ class Record52AgreementNumberTest {
 
             assertWellFormed(record)
             assertThat(zone19(record)).isEqualTo(agreementNumber)
+            assertThat(record).isEqualTo(kine)
         }
     }
 
@@ -226,7 +241,6 @@ class Record52AgreementNumberTest {
     fun aRefusedRecordEmitsNothingAtAll() {
         val refused = listOf<InvoiceItem.() -> Unit>(
             { agreementNumber = "306" },                                           // malformed Z 19
-            { agreementNumber = this@Record52AgreementNumberTest.agreementNumber }, // Z 19 without eID, kine
             { eidItem = eidItem().apply { readType = "Z" } },                       // invalid Z 9
             { eidItem = eidItem().apply { deviceType = "Z" } }                      // invalid Z 10
         )

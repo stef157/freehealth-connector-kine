@@ -572,15 +572,23 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
      * [InvoiceItem.eidItem] or [InvoiceItem.agreementNumber] is set, and when both are set they end up in the same
      * record, as annexe 26.4 prescribes.
      *
-     * For a physiotherapist (ET 10 Z 18 = [KINE_PROFESSION_CODE]) the two are *not* independent. Annexe 26.4 is
-     * titled "Enregistrement de type 52 (facultatif, sauf zone 19)": what makes the record mandatory is indeed
-     * zone 19 alone. But once the record exists, the same table makes "Z 9 Type de saisie document identite -
-     * Obligation de completer" and "Z 10 Type de support document identite - Obligation de completer", **with no
-     * exception clause** - unlike Z 6a/6b and Z 12/13 ("sauf lorsque Z 9 = 4 et Z 3 = 3") or Z 16 ("sauf lorsque
-     * Z 10 = 7, 8 ou 9"). So there is no conformant ET 52 with an empty Z 9 / Z 10, and an agreement number without
-     * an [InvoiceItem.eidItem] is refused rather than written as blanks. Note that satisfying Z 9 / Z 10 does not
-     * require an actual card reading: readType 4 (manual) with a deferred manualEntryReason, or deviceType 7
-     * (vignette), are exactly the escape routes the annexe provides, and [EIDItem] already models them.
+     * An agreement number *alone* is enough, for a physiotherapist as for anybody else: the identity zones stay at
+     * their default when there was no card reading. Source, "Instructions de facturation electronique" (INAMI, read
+     * 26/08/2026): the zone descriptions ET 52 ZONE 9 (p. 543, 1 A - 49) and ZONE 10 (p. 544, 1 A - 50) both open
+     * with "Zone facultative jusqu'a ce que la verification de l'identite du patient par lecture du document
+     * d'identite devienne obligatoire. Pour les praticiens de l'art infirmier, l'obligation entrera en vigueur le
+     * 1/10/2017." - nursing is the only profession given a date. ZONE 19 (p. 551, 20 A - 132) carries the opposite:
+     * "(4) A partir du 01/05/22, cette zone doit obligatoirement etre completee par les kinesitherapeutes."
+     *
+     * Eight of the seventeen ET 52 zone descriptions carry that "facultative jusqu'a" clause - Z 3, 6a-6b, 9, 10,
+     * 11, 12-13, 16, 17, i.e. every identity capture zone - and Z 19 is the only non structural zone without it.
+     * That is exactly what the title of annexe 26.4 (p. 204) says: "Enregistrement de type 52 (facultatif, sauf
+     * zone 19)". This code used to read that annexe's "Obligation de completer" column alone and refuse the
+     * combination; the column is qualified by the zone descriptions, and p. 543 was republished 28/04/2026, later
+     * than annexe 26.4 (published 28/06/2022).
+     *
+     * No identity document data is ever fabricated here: with a null [InvoiceItem.eidItem] the eID zones keep their
+     * default, and nothing is invented.
      */
     @Throws(IOException::class)
     fun writeEid(recordNumber: Int,
@@ -588,13 +596,6 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         val ws = WriterSession(writer, Record52Description)
 
         if (icd.eidItem == null && icd.agreementNumber == null) { return recordNumber }
-
-        require(icd.eidItem != null || invoiceSender.professionCode != KINE_PROFESSION_CODE) {
-            "an ET 52 carrying an agreement number must also carry the identity document capture: INAMI annexe 26.4 " +
-                "makes Z 9 (type de saisie) and Z 10 (type de support) mandatory for physiotherapists with no " +
-                "exception. Set InvoiceItem.eidItem - readType 4 with a deferred manualEntryReason, or deviceType 7, " +
-                "when there was no card reading."
-        }
 
         val agreementNumber = icd.agreementNumber?.also {
             // ET 52 Z 19 is declared 20 A but holds only digits; a shorter value would be silently blank padded and
@@ -628,8 +629,9 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("19", agreementNumber)
 
         if (eidItem == null) {
-            // Agreement number only, for a sector whose annexe does not impose the eID zones: they keep their
-            // default. Refused above for physiotherapists, and no identity document data is ever fabricated here.
+            // Agreement number only: the identity zones keep their default. The zone descriptions make them
+            // "facultative jusqu'a ce que la verification de l'identite ... devienne obligatoire" (p. 543, p. 544),
+            // so this is the conformant record for a reading that did not happen - physiotherapists included.
             ws.write("3", 0)
             ws.write("17", 0)
             ws.writeFieldsWithCheckSum()

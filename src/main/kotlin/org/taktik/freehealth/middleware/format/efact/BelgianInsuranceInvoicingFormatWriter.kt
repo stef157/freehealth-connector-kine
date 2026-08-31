@@ -433,6 +433,25 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
     }
 
     @Throws(IOException::class)
+    /**
+     * ET 50 Z 15, and therefore ET 52 Z 15 with it.
+     *
+     * ET 50 ZONE 15 (p. 468) is "le numero d'identification du dispensateur de soins qui a reellement effectue la
+     * prestation", so it reads the item, not the sender of the batch. Annexe 26.4 (p. 204) then prescribes for the
+     * type 52 record "15  Identification dispensateur  = ET 50 Z 15" — an equality, which is why both records read
+     * this one function rather than each deciding for itself. A medical house keeps ET 50's own exception: it bills
+     * 109594 and 400396 under its own number, and leaves the zone empty for everything else.
+     *
+     * Nothing is padded here. The zone is 12 N, so [Zone] completes it on the left with zeroes, which is what
+     * p. 468 asks for ("toujours precede d'un zero dans la premiere position"). Completing on the right would turn
+     * a ten position identification into a different, larger number without malforming anything.
+     */
+    private fun providerIdentification(sender: InvoiceSender, icd: InvoiceItem): Any? = when {
+        !sender.isMedicalHouse -> icd.doctorIdentificationNumber
+        icd.codeNomenclature == 109594L || icd.codeNomenclature == 400396L -> sender.nihii
+        else -> null
+    }
+
     fun writeRecordContent(recordNumber: Int,
                            sender: InvoiceSender,
                            invoicingYear: Int?,
@@ -483,8 +502,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("12", (icd.timeOfDay?: InvoicingTimeOfDay.Other).code)
         ws.write("13",990)
         if (sender.isMedicalHouse) ws.write("14", sender.nihii) else if (icd.options?.get("careLocationNihii")?.isNotEmpty() == true) ws.write("14", icd.options?.get("careLocationNihii")) else null
-        if (!sender.isMedicalHouse) ws.write("15", icd.doctorIdentificationNumber)
-        if (sender.isMedicalHouse && (icd.codeNomenclature == 109594L || icd.codeNomenclature == 400396L)) ws.write("15", sender.nihii)
+        ws.write("15", providerIdentification(sender, icd))
         //ws.write("16", if (sender.isMedicalHouse) 0 else if (icd.gnotionNihii == null || icd.gnotionNihii?.let { it.isEmpty() } == true) 1 else 4)
         ws.write("16",
             when {
@@ -663,7 +681,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("7", 0)
         ws.write("8a", noSIS)
         ws.write("14", 0)
-        ws.write("15", invoiceSender.nihii.toString().padEnd(11, '0'))
+        ws.write("15", providerIdentification(invoiceSender, icd))
         ws.write("19", agreementNumber)
 
         if (eidItem == null) {

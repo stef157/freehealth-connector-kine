@@ -25,6 +25,7 @@ import org.taktik.freehealth.middleware.domain.common.Patient
 import org.taktik.freehealth.middleware.dto.efact.EIDItem
 import org.taktik.freehealth.middleware.dto.efact.InvoiceItem
 import org.taktik.freehealth.middleware.dto.efact.InvoiceSender
+import org.taktik.freehealth.middleware.format.efact.segments.Record50Description
 import org.taktik.freehealth.middleware.format.efact.segments.Record51Description
 import org.taktik.freehealth.middleware.format.efact.segments.Record52Description
 import java.io.StringWriter
@@ -74,11 +75,18 @@ class Record52AgreementNumberTest {
 
     private fun eidItem() = EIDItem(20260729000000L, 1030, "5910212346", 0, 1)
 
-    /** A 567011 session on 29/07/2026 — the nominal accepted scenario of the CIN physiotherapist test manual. */
+    /**
+     * A 567011 session on 29/07/2026 — the nominal accepted scenario of the CIN physiotherapist test manual.
+     *
+     * The line names its own provider, as every real batch does: ET 50 Z 15 and ET 52 Z 15 both read
+     * [InvoiceItem.doctorIdentificationNumber] (annexe 26.4 p. 204). Here they coincide with the sender, which is
+     * the solo practitioner case.
+     */
     private fun item() = InvoiceItem().apply {
         codeNomenclature = 567011L
         dateCode = 20260729L
         reimbursedAmount = 1000L
+        doctorIdentificationNumber = "54123456789"
     }
 
     private fun write(icd: InvoiceItem, sender: InvoiceSender = sender()): String {
@@ -285,6 +293,98 @@ class Record52AgreementNumberTest {
             assertThatThrownBy { write(item().apply { eidItem = eidItem(); agreementNumber = value }) }
                 .isInstanceOf(IllegalArgumentException::class.java)
                 .matches({ it.message?.contains(value.trim()) == false }, "message must not echo the value")
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // ET 52 Z 15 — the provider of the line, not the sender of the batch.
+    //
+    // Annexe 26.4 (kinesitherapeutes, p. 204) prescribes for the type 52 record: "15  Identification
+    // dispensateur  = ET 50 Z 15", and ET 50 ZONE 15 (p. 468) reads "le numero d'identification du dispensateur
+    // de soins qui a reellement effectue la prestation ... toujours precede d'un zero dans la premiere position".
+    // Two consequences are asserted here: the value comes from the item, exactly as ET 50 reads it, and a value
+    // shorter than the zone is completed on the LEFT, never on the right.
+    // ---------------------------------------------------------------------------------------------------------
+
+    private fun zone15(record: String): String {
+        val zd = Record52Description.zoneDescriptionsByZone["15"]!!
+        assertThat(zd.position).isEqualTo(68)
+        assertThat(zd.length).isEqualTo(12)
+        return record.substring(zd.position - 1, zd.position - 1 + zd.length)
+    }
+
+    /** ET 50 Z 15 of the same item, read from the record the writer really produces. */
+    private fun record50Zone15(icd: InvoiceItem, sender: InvoiceSender = sender()): String {
+        val sw = StringWriter()
+        BelgianInsuranceInvoicingFormatWriter(sw)
+            .writeRecordContent(3, sender, 2026, 7, patient(), false, "300", icd)
+        val zd = Record50Description.zoneDescriptionsByZone["15"]!!
+        return sw.toString().substring(zd.position - 1, zd.position - 1 + zd.length)
+    }
+
+    /** A substitute billing through the practice's batch: ET 50 names them, so ET 52 must name them too. */
+    @Test
+    fun zone15CarriesTheProviderOfTheLineNotTheSenderOfTheBatch() {
+        val substitute = item().apply { eidItem = eidItem(); doctorIdentificationNumber = "11478761004" }
+        val record = write(substitute)
+        assertWellFormed(record)
+        assertThat(zone15(record)).isEqualTo("011478761004")
+        assertThat(zone15(record)).isNotEqualTo("054123456789")
+    }
+
+    /** The equality the annexe states, held record against record rather than by reading the writer. */
+    @Test
+    fun zone15IsAlwaysWhatRecord50Zone15Holds() {
+        listOf(null, "54123456789", "11478761004", "1478761004").forEach { provider ->
+            val icd = item().apply { eidItem = eidItem(); doctorIdentificationNumber = provider }
+            assertThat(zone15(write(icd)))
+                .describedAs("provider %s", provider)
+                .isEqualTo(record50Zone15(icd))
+        }
+    }
+
+    /**
+     * p. 468 asks for the number to be preceded by a zero, i.e. completed on the left. A ten position
+     * identification completed on the RIGHT reads as a different, larger number, and nothing is malformed —
+     * which is why no validation catches it.
+     */
+    @Test
+    fun aShortIdentificationIsCompletedOnTheLeftNotOnTheRight() {
+        val short = "1478761004"
+        val record = write(item().apply { eidItem = eidItem(); doctorIdentificationNumber = short },
+            sender().apply { nihii = short.toLong() })
+        assertWellFormed(record)
+        assertThat(zone15(record)).isEqualTo("00" + short)
+        assertThat(zone15(record)).isNotEqualTo("0" + short + "0")
+    }
+
+    /**
+     * When the line names no provider the zone holds zeroes, because that is what ET 50 Z 15 holds — the record
+     * follows ET 50 even where ET 50 itself is empty. Before this rule the zone carried the batch sender, so a
+     * batch that never sets the field sees this zone change from the sender to zeroes.
+     */
+    @Test
+    fun zone15IsZeroWhenTheLineNamesNoProvider() {
+        val anonymous = { item().apply { eidItem = eidItem(); doctorIdentificationNumber = null } }
+        val record = write(anonymous())
+        assertWellFormed(record)
+        assertThat(zone15(record)).isEqualTo("000000000000")
+        assertThat(zone15(record)).isEqualTo(record50Zone15(anonymous()))
+    }
+
+    /** A medical house bills 109594 / 400396 under its own number, and ET 52 must not diverge from that either. */
+    @Test
+    fun aMedicalHouseSharesRecord50sOwnRuleForZone15() {
+        // isMedicalHouse is a computed getter over the NIHII, not a settable flag: it wants a number starting
+        // with 8 whose last three digits are one of "111"/"110"/"100"/"101"/"001"/"010"/"011".
+        val house = sender().apply { nihii = 81000000111L }
+        assertThat(house.isMedicalHouse).isTrue()
+        listOf(109594L to "081000000111", 567011L to "000000000000").forEach { (code, expected) ->
+            val icd = item().apply { codeNomenclature = code; eidItem = eidItem() }
+            val record = write(icd, house)
+            assertWellFormed(record)
+            assertThat(zone15(record)).describedAs("code %s", code).isEqualTo(expected)
+            assertThat(zone15(record)).isEqualTo(record50Zone15(icd, house))
         }
     }
 }

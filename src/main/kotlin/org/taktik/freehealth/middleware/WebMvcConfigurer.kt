@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.web.WebProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.MediaType
 import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity
@@ -30,6 +31,10 @@ class WebMvcConfigurer(val webProperties: WebProperties, val objectMapper: Objec
         // Disable use of pathExtension and parameter for content negotiation
         contentNegotiationConfigurer.favorPathExtension(false)
         contentNegotiationConfigurer.favorParameter(false)
+        // A request that sends no Accept header gets JSON. Without this, Spring Boot 3 picked whichever
+        // converter came first and answered application/cbor - measured on a 401 body, which Spring Boot 2
+        // returned as application/json;charset=utf-8. Clients that do not set Accept would read binary.
+        contentNegotiationConfigurer.defaultContentType(MediaType.APPLICATION_JSON)
     }
 
     override fun configurePathMatch(pathMatchConfigurer: PathMatchConfigurer) {
@@ -58,9 +63,12 @@ class WebMvcConfigurer(val webProperties: WebProperties, val objectMapper: Objec
     }
 
     override fun extendMessageConverters(converters: MutableList<HttpMessageConverter<*>>) {
-        // Remove Smile HTTP converter (auto-configured because jackson-dataformat-smile is on the
-        // classpath via the Elasticsearch transitive dependency). Controllers must only return JSON.
-        converters.removeIf { it.supportedMediaTypes.any { mt -> mt.subtype.contains("smile") } }
+        // Remove the binary Jackson converters (auto-configured because jackson-dataformat-smile and
+        // -cbor are on the classpath via the Elasticsearch transitive dependency). Controllers must only
+        // return JSON. Smile alone used to be enough; under Spring Boot 3 CBOR reached the wire too.
+        converters.removeIf {
+            it.supportedMediaTypes.any { mt -> mt.subtype.contains("smile") || mt.subtype.contains("cbor") }
+        }
         // Replace default JSON converter with one backed by our configured ObjectMapper
         converters.removeIf { it is MappingJackson2HttpMessageConverter }
         converters.add(MappingJackson2HttpMessageConverter(objectMapper))

@@ -68,6 +68,19 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
   `management.endpoint.health.show-details` with `never`. Properties are last-one-wins, so the uptime details silently
   vanished. `grep -vE '^\s*#|^\s*$' … | cut -d= -f1 | sort | uniq -d` catches that class of merge damage.
 - **`LocalServerPort` moved** to `org.springframework.boot.test.web.server.LocalServerPort`.
+- **Two response-contract regressions, both measured against the Spring Boot 2 container side by side, both
+  fixed here** — they would have broken clients silently, not loudly:
+  - A request sending **no `Accept` header** got `application/cbor` — a binary body where Spring Boot 2 sent
+    `application/json;charset=utf-8`. `jackson-dataformat-cbor` and `-smile` are both on the classpath through
+    an Elasticsearch transitive dependency; `WebMvcConfigurer.extendMessageConverters` dropped only Smile.
+    Fixed by dropping CBOR too and setting `defaultContentType(APPLICATION_JSON)`.
+  - **`java.util.Date` rendered as an ISO string** instead of epoch millis, Spring Boot 3 having flipped that
+    default. Visible on `ExceptionDto.timestamp`, and the same rule governs `MemberDataListDto.date`,
+    `MemberDataAckDto.date` and `EAgreementList.date` — the async MDA and eAgreement channels. Restored with
+    `spring.jackson.serialization.write-dates-as-timestamps=true`. The Joda serializers
+    (`yyyyMMdd` / `yyyyMMddHHmmss` numbers) are explicit in `MapperConfiguration` and were never at risk.
+- Unchanged, and **not** a migration regression: a missing mandatory query parameter still answers **500**, not
+  400 (`Required request parameter 'hcpNihii' … is not present`). Verified identical on both versions.
 - **The riskiest change is not covered by any offline test.** The branch's last three commits replace `SOAPConnection`
   with `java.net.http.HttpClient` (to avoid pinning virtual threads) — i.e. the SOAP transport itself — and they
   postdate the test baseline `MIGRATION_TO_SPRING_3_5_5.md` reports. Only a real acceptance call exercises it, sealing

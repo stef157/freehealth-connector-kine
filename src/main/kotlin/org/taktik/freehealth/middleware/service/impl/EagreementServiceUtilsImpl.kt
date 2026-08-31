@@ -155,7 +155,7 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
             if(requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND) billablePeriod = getBillablePeriod(agreementStartDate!!)
             created = ZonedDateTime.now(mcnTimezone).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"))
             enterer = Reference().apply { reference = "PractitionerRole/PractitionerRole1"}
-            if (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND) {
+            if (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE) {
                 referral = Reference().apply {
                     reference = "ServiceRequest/ServiceRequest1"
                 }

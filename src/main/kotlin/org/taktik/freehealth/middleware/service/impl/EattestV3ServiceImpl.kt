@@ -137,10 +137,11 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         patientFirstName: String,
         patientLastName: String,
         patientGender: String,
-        referenceDate: Int?,
+        referenceDate: Long?,
         eAttestRef: String,
         reason: String,
-        attemptNbr: Int?): SendAttestResultWithResponse? {
+        attemptNbr: Int?,
+        inputReference: String?): SendAttestResultWithResponse? {
         val samlToken =
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw IllegalArgumentException("Cannot obtain token for Ehealth Box operations")
@@ -151,7 +152,11 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         val crypto = CryptoFactory.getCrypto(credential, hokPrivateKeys)
 
         val detailId = "_" + IdGeneratorFactory.getIdGenerator("uuid").generateId()
-        val inputReference = InputReference().inputReference
+        // MPTI eAttest V3 Duplicata v1.0, 4.1.2: "InputReference SC2 = InputReference SC1". With no argument
+        // InputReference delegates to KmehrIdGenerator, which returns the clock to the second, so a resend can
+        // never be recognised as a duplicate. InputReference(String) already existed; only the surface was missing.
+        val inputReferenceValue = (inputReference?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { InputReference(it) } ?: InputReference()).inputReference
         val attribute = AttributeType().apply {
             key = "urn:be:cin:nippin:attemptNbr"
             value = attemptNbr ?: 1
@@ -214,7 +219,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                     request =
                         be.fgov.ehealth.mycarenet.commons.core.v4.RequestType()
                             .apply { isIsTest = config.getProperty("endpoint.genins")?.contains("-acpt") ?: false }
-                    this.inputReference = inputReference
+                    this.inputReference = inputReferenceValue
                     this.attribute.add(attribute)
                     origin = OriginType().apply {
                         `package` = PackageType().apply {
@@ -341,6 +346,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         referenceDate: Long?,
         attemptNbr: Int?,
         decisionReference: String?,
+        inputReference: String?,
         attest: Eattest): SendAttestResultWithResponse? {
         val derivedHcpQuality = hcpQuality ?: guardPostNihii?.let {"guardpost"} ?: "doctor"
 
@@ -354,7 +360,11 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         val crypto = CryptoFactory.getCrypto(credential, hokPrivateKeys)
 
         val detailId = "_" + IdGeneratorFactory.getIdGenerator("uuid").generateId()
-        val inputReference = InputReference().inputReference
+        // MPTI eAttest V3 Duplicata v1.0, 4.1.2: "InputReference SC2 = InputReference SC1". With no argument
+        // InputReference delegates to KmehrIdGenerator, which returns the clock to the second, so a resend can
+        // never be recognised as a duplicate. InputReference(String) already existed; only the surface was missing.
+        val inputReferenceValue = (inputReference?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { InputReference(it) } ?: InputReference()).inputReference
         val attribute = AttributeType().apply {
             key = "urn:be:cin:nippin:attemptNbr"
             value = attemptNbr ?: 1
@@ -427,7 +437,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                     request =
                         be.fgov.ehealth.mycarenet.commons.core.v4.RequestType()
                             .apply { isIsTest = config.getProperty("endpoint.genins")?.contains("-acpt") ?: false }
-                    this.inputReference = inputReference
+                    this.inputReference = inputReferenceValue
                     this.attribute.add(attribute)
                     origin = OriginType().apply {
                         `package` = PackageType().apply {
@@ -1241,7 +1251,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         traineeSupervisorLastName: String?,
         eAttestRef: String,
         reason: String,
-        referenceDate: Int?) : SendTransactionRequest {
+        referenceDate: Long?) : SendTransactionRequest {
 
         val refDateTime = dateTime(referenceDate) ?: now
 

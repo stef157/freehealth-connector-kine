@@ -51,6 +51,7 @@ interface EattestV3Service {
         referenceDate: Long?,
         attemptNbr: Int?,
         decisionReference: String?,
+        inputReference: String?,
         attest: Eattest
                   ): SendAttestResultWithResponse?
 
@@ -72,9 +73,10 @@ interface EattestV3Service {
         patientFirstName: String,
         patientLastName: String,
         patientGender: String,
-        referenceDate: Int?,
+        referenceDate: Long?,
         eAttestRef: String,
         reason: String,
-        attemptNbr: Int?
+        attemptNbr: Int?,
+        inputReference: String?
                     ): SendAttestResultWithResponse?
 }

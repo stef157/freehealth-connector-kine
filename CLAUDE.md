@@ -414,27 +414,40 @@ message):
 
 `isTest = true` stamps field 304 with `9991999` instead of `1999`, which is how the OA tells a test batch apart.
 
-**`ET 52 Z 15` carries the batch sender, not the provider of the line** — measured 31/08/2026, reproduced twice
-before (lots D1, NC2) and now reduced to a minimal case. Annexe 26.4 (p. 204) prescribes
+**`ET 52 Z 15` used to carry the batch sender, not the provider of the line — fixed here.** Measured 31/08/2026,
+reproduced twice before (lots D1, NC2), then reduced to a minimal case. Annexe 26.4 (p. 204) prescribes
 `15  Identification dispensateur  = ET 50 Z 15`, and ET 50 Z 15 (p. 468) is *"le numéro d'identification du
-dispensateur de soins qui a réellement effectué la prestation"*.
-`BelgianInsuranceInvoicingFormatWriter.kt:628` instead writes `invoiceSender.nihii`, while the two neighbouring
-records read the item: ET 50 (line 448) and ET 51 (line 546) both write `icd.doctorIdentificationNumber`.
-`writeEid` already receives `icd`, so nothing is missing from its signature.
+dispensateur de soins qui a réellement effectué la prestation"*, *"toujours précédé d'un zéro dans la première
+position"*. `writeEid` wrote `invoiceSender.nihii.padEnd(11, '0')` while the two neighbouring records read the
+item — **two defects on one line**: the wrong source, and a completion **on the right**, which turns a ten
+position identification into a different, larger number (`1478761004` → `014787610040` instead of
+`001478761004`) without malforming anything.
 
 Two batches identical but for `items[0].doctorIdentificationNumber`, through `/efact/flat`:
 
-| batch | ET 50 Z 15 | ET 52 Z 15 expected | ET 52 Z 15 produced |
+| batch | ET 50 Z 15 | ET 52 Z 15 before | ET 52 Z 15 now |
 |---|---|---|---|
 | provider = sender | `054123456789` | `054123456789` | `054123456789` |
-| provider ≠ sender | `011478761004` | `011478761004` | **`054123456789`** |
+| provider ≠ sender | `011478761004` | **`054123456789`** | `011478761004` |
 
-So the defect is **invisible for a solo practitioner** — the two numbers coincide and every ET 52 is right by
-accident — and **wrong the moment a substitute bills through the practice's batch**: ET 50 names the substitute,
-ET 52 names the practice, the line is attributed to the wrong provider, and nothing is malformed, so no validation
-catches it. The line is verbatim in `upstream/master` (line 627 there), not a local regression. A ready-to-send
-reproduction — the two payloads, the two flat files, their sha256, a one-command `reproduce.sh` and an English
-note citing the annexe — sits in `out/et52-z15-repro/` (untracked, `.gitignore:11:out/`; it carries NISS).
+The defect was **invisible for a solo practitioner** — the two numbers coincide and every ET 52 was right by
+accident — and **wrong the moment a substitute bills through the practice's batch**. It was verbatim in
+`upstream/master` (line 627 there), not a local regression, and it **did** bite the real batch, whose sender
+(`…501`) and line provider (`…527`) differ by the qualification suffix already noted above.
+
+The rule now lives in one place, `providerIdentification`, read by **both** ET 50 and ET 52, so the equality the
+annexe states cannot drift — the medical house exception (109594 / 400396 under the house's own number) included.
+One consequence to know: an invoice whose items carry **no** `doctorIdentificationNumber` now writes zeroes in
+ET 52 Z 15, because that is what ET 50 Z 15 already held. **ET 51 was not touched**: the cited source states the
+equality for ET 52 only.
+
+A reproduction — the two payloads, the two flat files, their sha256, a one-command `reproduce.sh` and an English
+note citing the annexe — sits in `out/et52-z15-repro/` (untracked, `.gitignore:11:out/`; it carries NISS). Its
+archived `B-substitute-provider.flat` is the *pre-fix* output and no longer matches what the writer produces.
+
+**`InvoiceSender.isMedicalHouse` is not a settable flag**, despite being a `var`: its getter is computed from the
+NIHII (starts with `8`, last three digits in a published list), so assigning it does nothing. A test fixture that
+sets it is testing the non-medical-house branch.
 
 `/efact/flat` needs two things `/efact/flatcore` does not: a `fileRef` (`EfactServiceImpl.kt:72`, else a bare 500
 `FileRef cannot be null`) and an explicit `Accept: text/plain` — without it the endpoint answers

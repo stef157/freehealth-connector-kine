@@ -15,13 +15,13 @@ generated JAXB classes and XSD/WSDL resources.
 
 ## Toolchain and build
 
-Gradle 6.7 (wrapper) · Kotlin 1.3.50 · Spring Boot 2.0.9 · Jetty (Tomcat is excluded globally) · **Java 8 target**.
+Gradle 8.13 (wrapper) · Kotlin 2.2.10 · Spring Boot 3.5.13 · Jetty 12 (Tomcat is excluded globally) ·
+**Java 21 target, virtual threads on**. The build is `build.gradle.kts` with its versions in `libs.versions.toml`.
 
-Build with a JDK 8 — Gradle 6.7 does not officially support recent JDKs, and Kotlin 1.3 is far older than the JDK 21
-that is the machine default here:
+Build with a JDK 21:
 
 ```bash
-export JAVA_HOME=/path/to/jdk8        # e.g. Temurin 8; Gradle 6.7 predates modern JDKs
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew bootRun          # starts on port 8090 (the README's 8080 is stale — see application.properties)
 ./gradlew build            # compile + test
 ./gradlew test             # integration tests, see caveats below
@@ -29,23 +29,49 @@ export JAVA_HOME=/path/to/jdk8        # e.g. Temurin 8; Gradle 6.7 predates mode
 ./gradlew test --tests "*.STSControllerTest.requestToken"
 ./gradlew ktlint           # style check (not wired into `check`)
 ./gradlew ktlintFormat     # auto-fix
-./gradlew dockerize -x test   # local image docker.taktik.be/icure/freehealth-connector:<version>
+./gradlew dockerize        # local image docker.taktik.be/icure/freehealth-connector:<version>
+./gradlew dockerize -PgitVersion=3.5.0   # …tagged 3.5.0 instead of the default 0.0.1-SNAPSHOT
 ```
 
-`dockerize` depends on `build`, so `-x test` is required unless you have the test setup below. It only builds a local
-image — the push (and the `docker login docker.taktik.be` in `ci/cloudbuild.yaml`) happens **only** with
-`-PdockerPush`, per `DockerJavaPlugin`. The base image `anapsix/alpine-java:8_jdk_unlimited` is amd64-only, so on
-Apple Silicon Docker emulates it and warns `InvalidBaseImagePlatform`; the build still succeeds.
+`dockerize` is defined in `build.gradle.kts` here, not by a plugin: it runs `bootJar` and then `docker build` on the
+repo's own `Dockerfile` (`eclipse-temurin:21-jre`, **shell** entrypoint so `JAVA_OPTS` still reaches the JVM — see the
+licence section, that is where the CIN credentials travel). `dockerPush` pushes the same tag. Upstream instead builds
+`build.Dockerfile` + `package.Dockerfile` onto `gcr.io/distroless/java21-debian12` from `ci/cloudbuild.yaml`; those
+files are left in place for its CI but are not what this deployment uses — the distroless entrypoint is
+`["java","-jar",…]` with no shell, so it would silently drop `JAVA_OPTS`.
 
-`./gradlew compileKotlin` under JDK 8 succeeds from a clean state in ~2.5 min (first run also downloads from
+The image is now **arm64-native** (588 MB): no more `InvalidBaseImagePlatform`, no more amd64 emulation. It boots in
+**~7.5 s**, where the emulated Java 8 image took ~28 s.
+
+`./gradlew compileKotlin` under JDK 21 succeeds from a clean state in ~3 min (first run also downloads from
 `maven.taktik.be` and `repo.ehealth.fgov.be`) and emits a long tail of harmless Kotlin warnings — unnecessary `!!`,
-useless elvis operands, shadowed names. They are pre-existing; don't treat them as something your change introduced.
+useless elvis operands, shadowed names, deprecations. They are pre-existing; don't treat them as something your change
+introduced.
 
-This working copy is a plain source download, **not a git checkout**. The `git-version` plugin therefore logs
-`fatal: not a git repository` and `Could not get git version` and the project version falls back to `0.0` — the build
-still succeeds, so ignore those lines.
+The project version is `gitVersion ?: "0.0.1-SNAPSHOT"`, where `gitVersion` is a Gradle property the CI passes
+(`-PgitVersion=…`); the old `git-version` plugin and its `fatal: not a git repository` noise are gone.
 
-API docs (Swagger 2 / springfox) are served at `/api/index.html` once running.
+API docs are served by **springdoc** (OpenAPI 3): UI at `/swagger-ui.html`, descriptor at `/v3/api-docs`. SpringFox and
+its `/api/index.html` / `/v2/api-docs` are gone.
+
+### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
+
+The migration merged upstream's branch, which had forked **before** the current master and was five months stale: it
+was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-15407. Merging it *into* our master
+(which already had all of those) kept our side and replayed the branch's mechanical transforms on top. Read
+`MIGRATION_TO_SPRING_3_5_5.md` for upstream's own account. What bit, and is worth remembering:
+
+- **`javax` → `jakarta` is not a global rename.** JAXP stayed `javax` (see the conventions section). The eAgreement v2
+  JAXB wrappers, the whole `mediprimaUma` package and a handful of Kotlin services reached the merge without conflict
+  and therefore without conversion — a clean merge is not a compiling merge.
+- **`application.properties` gained a duplicate key.** The branch's Actuator block repeated
+  `management.endpoint.health.show-details` with `never`. Properties are last-one-wins, so the uptime details silently
+  vanished. `grep -vE '^\s*#|^\s*$' … | cut -d= -f1 | sort | uniq -d` catches that class of merge damage.
+- **`LocalServerPort` moved** to `org.springframework.boot.test.web.server.LocalServerPort`.
+- **The riskiest change is not covered by any offline test.** The branch's last three commits replace `SOAPConnection`
+  with `java.net.http.HttpClient` (to avoid pinning virtual threads) — i.e. the SOAP transport itself — and they
+  postdate the test baseline `MIGRATION_TO_SPRING_3_5_5.md` reports. Only a real acceptance call exercises it, sealing
+  and timestamping included. The earlier SAAJ 3.0.4 upgrade already broke that path once with `WRONG_DOCUMENT_ERR`.
 
 ## Tests are live integration tests
 
@@ -65,11 +91,27 @@ Consequence: **red tests do not imply a regression.** Compare against a baseline
 `scripts/parse-test-results.sh` is for: run `./gradlew test --continue`, then the script parses
 `build/test-results/test/*.xml` into a sorted `PASS/FAIL/ERROR/SKIP` list per branch for diffing.
 
-The genuinely offline tests are the ones under `service/impl/` that build and validate payloads
-(`CreatePrescriptionTest`, `InferPrescTypeTest`, `EagreementServiceUtilsTest`, `ValidatorTest`, …), plus
-`AddressbookControllerOfflineTest`, which boots the app and hits `/ab/search/hcp` and `/v2/api-docs` — the criteria
-are validated before any eHealth call, so fake auth headers are enough and no keystore or network is needed. That
-one runs in ~30 s and is the quickest way to check the app still boots.
+The genuinely offline tests — measured, not assumed:
+
+| test | tests | needs |
+|---|---|---|
+| `AddressbookControllerOfflineTest` | 5 | nothing; boots the app, hits `/ab/search/hcp` and `/v3/api-docs` |
+| `EfactFlatcoreOfflineTest` | 5 | nothing; renders the 920000 flat file |
+| `Record52AgreementNumberTest` | 12 | nothing; pure ET 52 zone rules |
+| `ValidatorTest` | 3 | nothing |
+| `EagreementServiceUtilsTest` | 19, **3 red** | `test.properties` to exist |
+
+Those two Addressbook/Efact suites are the quickest way to check the app still boots (~20 s together). Two traps:
+
+- **`InferPrescTypeTest` and `CreatePrescriptionTest` are not offline**, despite living next to the others: their
+  `@Before` calls `stsService.uploadKeystore(…"$ssin.acc-p12"…)` and then `requestToken`, so they need a real
+  acceptance certificate and the network. Without `test.properties` they fail even earlier, on
+  `FileNotFoundException: class path resource [test.properties]` while the Spring context loads — an error that names
+  neither the certificate nor the test.
+- **`EagreementServiceUtilsTest` has 3 permanently red tests**: `getInsurance`, `getParameter`, `getServiceRequest`.
+  They contradict the code they test — `getInsurance` fills `preAuthRef` only `if (requestType != ASK)` while the test
+  passes `ASK` and asserts the value is there. Verified identical on Spring Boot 2 / JDK 8 and on Spring Boot 3.5 /
+  JDK 21, and unchanged since the branch point, so they are upstream's stale tests, not a regression. Expect 16/19.
 
 ## Architecture
 
@@ -146,11 +188,12 @@ docker run -d --name fhc -p 8090:8090 -v fhc-ehealth:/opt/ehealth -v fhc-tmp:/tm
 `fhc-tmp` matters: the connector caches the BCP endpoint list and TSL state in `/tmp`
 (`…bcp.EndpointUpdater.xml`, `…tsl.TrustStoreUpdater.properties`), and the Dockerfile otherwise mounts an anonymous
 volume there that is discarded on every run. With it persisted, the second startup no longer logs
-`Unable to load endpoints`. It boots in ~28 s and `/actuator/health` returns `{"status":"UP"}` with, for each
+`Unable to load endpoints`. It boots in **~7.5 s** and `/actuator/health` returns `{"status":"UP"}` with, for each
 indicator, a `details` block: `uptime` (`UptimeHealthIndicator` — JVM uptime, human readable and in millis, plus the
-start time), `diskSpace` and `db`. That nesting comes from `management.endpoint.health.show-details=always`; drop the
-property and the answer collapses back to the bare status. `/actuator/**` is `permitAll`, so those details are
-unauthenticated.
+start time), `diskSpace`, `hazelcast`, `ssl` and `ping`. That nesting comes from
+`management.endpoint.health.show-details=always`; drop the property and the answer collapses back to the bare status.
+`management.endpoints.web.exposure.include=health` restricts the web-exposed actuators to that one endpoint.
+`/actuator/**` is `permitAll`, so those details are unauthenticated.
 
 Spring-side config is `src/main/resources/application.properties` (port 8090, `spring.application.name=fhc`) plus
 `icure.hazelcast.*` and CouchDB properties for the admin/login side.
@@ -408,17 +451,24 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   output and not on the classpath — never scan, modify, or grep them wholesale.
 - Kotlin style: 4 spaces, 120 columns (`.editorconfig`); `ktlint` is available but deliberately not part of `check`,
   and much of the existing code would not pass it. Match the surrounding file rather than reformatting.
-- Legacy dependencies are used on purpose (Dozer + Orika mapping, Velocity, joda-time, Lucene, Hibernate/H2). Several
-  are flagged `//WTF... This must go away` in `build.gradle` — don't spread them further, don't crusade against them.
+- **New code is jakarta and Jackson.** Java 21 / Spring Boot 3 mean `jakarta.xml.bind`, `jakarta.xml.ws`,
+  `jakarta.xml.soap`, `jakarta.servlet`, `jakarta.validation`. **JAXP did not move**: `javax.xml.datatype`,
+  `.parsers`, `.transform`, `.xpath`, `.namespace`, `.validation` are JDK packages and stay `javax` — converting
+  those breaks the build. Gson is gone from the dependencies (use Jackson `ObjectMapper` / `JsonNode` / `ObjectNode`),
+  Orika is gone (replaced by `middleware/mapper/MapperFacade.kt`, which wraps Jackson's `convertValue()`), so are
+  SpringFox, Lucene and the webjars.
+- Legacy dependencies that are still there on purpose: Dozer, Velocity, joda-time, Hibernate/H2 — don't spread them
+  further, don't crusade against them.
 - Domains are versioned by eHealth, hence parallel `Eattest`/`EattestV2`/`EattestV3`, `Ehbox`/`EhboxV3`,
   `MemberData`/`memberdatav2`, `Mediprima`/`mediprimav2`/`mediprimaUma`. A fix usually belongs in one specific
   version — check which one the caller uses before touching all of them.
 - JSON dates are serialized as `yyyyMMdd` / `yyyyMMddHHmmss` **numbers** (`MapperConfiguration.kt`), not ISO strings.
-- `genJaxb` exists in `build.gradle` but is dormant (its dependencies are commented out); JAXB classes are committed.
-- Swagger 2 / springfox: only some controllers are annotated (`Addressbook`, `Hub`, `STS`, `Eagreement`, `Dmg`,
-  `Crypto`), with `@ApiOperation(value, notes)` on the method and `@ApiParam` on each parameter. **`@ApiParam`
-  defaults `required` to `false` and springfox lets that override what Spring deduced**, so a mandatory
-  `@RequestHeader` or `@PathVariable` that carries a bare `@ApiParam("…")` is published as optional — pass
-  `required = true` explicitly (`HubController` still shows the wrong behaviour). New paths must also match the
-  regex in `SwaggerConfiguration.kt` or they never appear in the descriptor.
+- `genJaxb` exists in `build.gradle.kts` but is dormant (its dependencies are commented out); JAXB classes are
+  committed.
+- **springdoc / OpenAPI 3**: `@Tag` on the controller class, `@Operation(summary, description)` on the method,
+  `@Parameter(description = …)` on the parameters — `io.swagger.v3.oas.annotations.*`, not the old
+  `io.swagger.annotations.*`. springdoc derives `required` from Spring's own annotations, so the SpringFox trap
+  (a bare `@ApiParam` publishing a mandatory `@RequestHeader` as optional) is gone;
+  `AddressbookControllerOfflineTest.searchHcpIsExposedInSwagger` asserts exactly that on `/v3/api-docs`.
+  Every controller carries a `@Tag` now, and the descriptor no longer filters paths through a regex.
 - Licensed under AGPL v3; keep the existing file headers.

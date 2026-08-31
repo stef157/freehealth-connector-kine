@@ -1,8 +1,3 @@
-.gradle
-build
-.idea
-*.iml
-.git
-.gitignore
-README.md
-.placeholder
+# only the jar named by the `jar` build argument is needed
+*
+!build/libs/*.jar

@@ -174,6 +174,36 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
+/**
+ * Builds the local deployment image from the boot jar, the way ./gradlew dockerize did before the Spring
+ * Boot 3 migration removed the DockerJavaPlugin. Pass -PgitVersion=x.y.z to tag something other than the
+ * default version, and -PdockerPush to push it.
+ */
+val dockerize by tasks.registering(Exec::class) {
+    group = "docker"
+    description = "Build the docker image from the boot jar."
+    dependsOn(tasks.named("bootJar"))
+    val image = "docker.taktik.be/icure/freehealth-connector:$version"
+    doFirst {
+        val jar = tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar")
+            .get().archiveFile.get().asFile
+        commandLine(
+            "docker", "build",
+            "--build-arg", "jar=${jar.relativeTo(projectDir)}",
+            "-t", image,
+            "."
+        )
+    }
+    doLast { logger.lifecycle("built $image") }
+}
+
+tasks.register<Exec>("dockerPush") {
+    group = "docker"
+    description = "Push the image built by dockerize."
+    dependsOn(dockerize)
+    commandLine("docker", "push", "docker.taktik.be/icure/freehealth-connector:$version")
+}
+
 tasks.register<JavaExec>("ktlint") {
     group = "verification"
     description = "Check Kotlin code style."

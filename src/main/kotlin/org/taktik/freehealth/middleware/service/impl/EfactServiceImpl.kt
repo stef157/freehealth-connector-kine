@@ -134,6 +134,16 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
             iv.writeFileHeader(1, batch.sender!!, if (isTest) 9991999L else 1999L, batch.uniqueSendNumber!!, batch.invoicingYear, batch.invoicingMonth, batch.batchRef!!, batch.invoiceContent)
         metadata.recordsCount++
 
+        // ET 20 Z 42-45 filled and an ET 51 in the same invoice is refused by the OA: seven codes say so, among
+        // them 204217 F, "Donnees de reference reseau different de zero et enregistrement de type 51 present".
+        // An ET 51 is written for every item carrying an insuranceRef, so the two are mutually exclusive here.
+        batch.invoices.forEach { invoice ->
+            require(invoice.paymentApproval.isNullOrBlank() || invoice.items.none { it.insuranceRef != null }) {
+                "paymentApproval (ET 20 Z 42-45) cannot be combined with an ET 51: invoice " +
+                    "${invoice.invoiceRef} carries an item with an insuranceRef (204217)"
+            }
+        }
+
         for (invoice in batch.invoices.sortedWith(Comparator { i1, i2 ->
             when {
                 i1.creditNote && !i2.creditNote -> -1
@@ -152,7 +162,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
                 var recordFee = 0L
                 var recordSup = 0L
                 rn =
-                    iv.writeRecordHeader(rn, batch.sender!!, invoice.invoiceNumber!!, invoice.reason!!, invoice.invoiceRef!!, invoice.patient!!, invoice.ioCode!!, invoice.ignorePrescriptionDate, invoice.hospitalisedPatient, invoice.creditNote, invoice.relatedBatchSendNumber, invoice.relatedBatchYearMonth, invoice.relatedInvoiceIoCode, invoice.relatedInvoiceNumber, batch.magneticInvoice, invoice.startOfCoveragePeriod, invoice.admissionDate, invoice.locationNihii, invoice.locationService)
+                    iv.writeRecordHeader(rn, batch.sender!!, invoice.invoiceNumber!!, invoice.reason!!, invoice.invoiceRef!!, invoice.patient!!, invoice.ioCode!!, invoice.ignorePrescriptionDate, invoice.hospitalisedPatient, invoice.creditNote, invoice.relatedBatchSendNumber, invoice.relatedBatchYearMonth, invoice.relatedInvoiceIoCode, invoice.relatedInvoiceNumber, batch.magneticInvoice, invoice.startOfCoveragePeriod, invoice.admissionDate, invoice.locationNihii, invoice.locationService, invoice.paymentApproval)
                 recordsCountPerOA[0]++
                 if(isMediprima){
                     rn = iv.writeMediprimaRecord(rn, batch.sender!!, invoice)

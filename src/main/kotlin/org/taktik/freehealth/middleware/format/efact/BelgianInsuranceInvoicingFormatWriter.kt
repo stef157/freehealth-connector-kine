@@ -54,6 +54,15 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
     companion object {
         /** Physiotherapist, as written to ET 10 Z 18 from [InvoiceSender.professionCode]. */
         const val KINE_PROFESSION_CODE = 50
+
+        /** ET 20 Z 43a, the card number: 10 N, not ours to fill when the engagement comes from the MDA. */
+        private const val CARD_NUMBER_UNKNOWN = "0000000000"
+
+        /** ET 20 Z 43b, the card version: 2 N, same. */
+        private const val CARD_VERSION_UNKNOWN = "00"
+
+        /** ET 20 Z 44: 1 N, `2` = the data comes from a consultation of the network (instructions, p. 275). */
+        private const val ORIGIN_NETWORK_CONSULTATION = "2"
     }
 
     private fun getInsurabilityParameters(patient: Patient, parameter: InsuranceParameter): String? {
@@ -291,7 +300,8 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
                           startOfCoveragePeriod: Long?,
                           admissionDate: Long?,
                           locationNihii: String?,
-                          locationService: Int?
+                          locationService: Int?,
+                          paymentApproval: String? = null
         ): Int {
 
         val ws = WriterSession(writer, Record20Description)
@@ -349,10 +359,38 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("37", relatedDestCode)
         ws.write("41", relatedBatchYearMonth)
         ws.write("47", (if (magneticInvoice!!) formattedCreationDate else "00000000"))
+        writeNetworkReference(ws, paymentApproval)
 
         ws.writeFieldsWithCheckSum()
 
         return recordNumber+1
+    }
+
+    /**
+     * ET 20 Z 42-43-44-45, the network reference data: the payment approval the MDA returned, in the 48 positions
+     * the instructions de facturation electronique lay out at p. 275 as `32 A + 10 N + 2 N + 1 N + 3 N`.
+     *
+     * The client supplies only the 32 alphanumerical positions - the structure is a fact of the format, not of the
+     * caller - and the sixteen that follow are composed here: card number (10 N) and card version (2 N) are not
+     * ours to fill, the origin (1 N) is `2`, "consultation du reseau", and the last three are reserve.
+     *
+     * When nothing is supplied the zone is left alone: its own default value is forty-eight zeroes, which is what
+     * p. 275 prescribes when the network was not consulted. Nothing is inferred from an absent value - in
+     * particular the origin digit is not written as `0`, because that would claim an answer nobody gave.
+     */
+    private fun writeNetworkReference(ws: WriterSession, paymentApproval: String?) {
+        val approval = paymentApproval?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        // A wrong length must be refused, not completed: the sector catalogue answers 204225 F, "Numero d'agrement
+        // de la consultation du reseau incorrect". The value itself never reaches the message.
+        require(approval.length == Record20Description.PAYMENT_APPROVAL_LENGTH) {
+            "paymentApproval (ET 20 Z 42-45) expected exactly ${Record20Description.PAYMENT_APPROVAL_LENGTH} " +
+                "alphanumerical characters, got ${approval.length} characters"
+        }
+        require(approval.all { it in '0'..'9' || it in 'A'..'Z' || it in 'a'..'z' }) {
+            "paymentApproval (ET 20 Z 42-45) expected exactly ${Record20Description.PAYMENT_APPROVAL_LENGTH} " +
+                "alphanumerical characters, got a non alphanumerical character"
+        }
+        ws.write("42", approval + CARD_NUMBER_UNKNOWN + CARD_VERSION_UNKNOWN + ORIGIN_NETWORK_CONSULTATION + "000")
     }
 
     @Throws(IOException::class)

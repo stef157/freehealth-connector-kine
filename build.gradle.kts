@@ -25,7 +25,33 @@ val gitVersion: String? by project
 
 group = "org.taktik"
 
-version = gitVersion ?: "0.0.1-SNAPSHOT"
+/**
+ * Reads git, returning null rather than failing when git is absent or this is not a checkout.
+ */
+fun gitOutput(vararg args: String): String? = try {
+    val process = ProcessBuilder(listOf("git") + args).directory(rootDir).start()
+    val out = process.inputStream.bufferedReader().readText().trim()
+    if (process.waitFor() == 0 && out.isNotEmpty()) out else null
+} catch (_: Exception) {
+    null
+}
+
+/**
+ * The version, and therefore the docker tag. `-PgitVersion=…` wins, as the CI passes it; otherwise reproduce
+ * what com.taktik.gradle:gradle-plugin-git-version produced before this migration dropped the plugin:
+ * `0.3.<commits since the 0.3.0 tag>-<sha10>`, suffixed `-dirty` when the tree carries uncommitted changes.
+ *
+ * Keeping that shape is not cosmetic. deploy/fhc/docker-compose.yml (kine-data repo) pins this exact form and
+ * forbids a floating tag, because only the sha names the code that a container is running - a reused tag once
+ * hid a jar two commits old. `0.0.1-SNAPSHOT` would say nothing at all.
+ */
+version = gitVersion
+    ?: gitOutput("rev-list", "--count", "0.3.0..HEAD")?.let { count ->
+        val sha = gitOutput("rev-parse", "HEAD")?.take(10) ?: return@let null
+        val dirty = if (gitOutput("status", "--porcelain") == null) "" else "-dirty"
+        "0.3.$count-$sha$dirty"
+    }
+    ?: "0.0.1-SNAPSHOT"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21

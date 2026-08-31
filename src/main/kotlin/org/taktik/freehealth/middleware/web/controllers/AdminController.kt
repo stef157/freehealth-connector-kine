@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -36,14 +36,37 @@ import org.springframework.http.MediaType
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.GetMapping
 import org.taktik.freehealth.middleware.dao.User
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.taktik.freehealth.middleware.dto.EndpointDistributorStatusDto
 
 
+/**
+ * REST controller exposing administrative endpoints for system management tasks such as
+ * adjusting log levels and monitoring or forcing Business Continuity Plan (BCP) endpoint updates.
+ * All endpoints in this controller require ROLE_ADMIN authority.
+ *
+ * @property addressbookService the addressbook service (injected dependency)
+ */
 @RestController
 @RequestMapping("/admin")
+@Tag(name = "Admin", description = "Administrative endpoints for system management.")
 class AdminController(val addressbookService: AddressbookService) {
     private val log = LogFactory.getLog(this.javaClass)
 
+    /**
+     * Changes the logging level for a specified Java/Kotlin package at runtime. This is useful for
+     * enabling more verbose logging during debugging without restarting the application.
+     * Requires ROLE_ADMIN authority.
+     *
+     * @param logLevel the desired logging level to set (one of TRACE, DEBUG, INFO, WARN, ERROR)
+     * @param packageName the fully qualified package name whose log level should be changed
+     * @return "ok" if the log level was successfully changed, or an error message if the level is unknown
+     */
+    @Operation(
+        summary = "Set log level",
+        description = "Changes the log level for a specified package. Requires ROLE_ADMIN authority."
+    )
     @PostMapping("/loglevel/{loglevel}", produces = [MediaType.TEXT_PLAIN_VALUE])
     @Throws(Exception::class)
     fun loglevel(@PathVariable("loglevel") logLevel: String, @RequestParam(value = "package") packageName: String): String {
@@ -58,12 +81,33 @@ class AdminController(val addressbookService: AddressbookService) {
         return setLogLevel(logLevel, packageName)
     }
 
+    /**
+     * Returns the current Business Continuity Plan (BCP) endpoint distributor status, including
+     * whether polling is required, whether BCP mode is active, and the mapping of services to
+     * their active and default endpoints. Requires ROLE_ADMIN authority.
+     *
+     * @return an [EndpointDistributorStatusDto] containing the current BCP status information
+     */
+    @Operation(
+        summary = "Get BCP status",
+        description = "Returns the current Business Continuity Plan (BCP) endpoint distributor status. Requires ROLE_ADMIN authority."
+    )
     @GetMapping("/bcp", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun bcpStatus(): EndpointDistributorStatusDto {
         val distributor = EndpointDistributor.getInstance()
         return EndpointDistributorStatusDto(mustPoll = distributor.mustPoll(), isBcpMode = distributor.isBCPMode, active = distributor.service2ActiveEndpoint, default = distributor.service2DefaultEndpoint)
     }
 
+    /**
+     * Forces an immediate update of the Business Continuity Plan (BCP) endpoint status by
+     * triggering the [EndpointUpdater] to re-evaluate all service endpoints. This can be used
+     * to manually refresh the BCP state without waiting for the next scheduled poll.
+     * Requires ROLE_ADMIN authority.
+     */
+    @Operation(
+        summary = "Force BCP update",
+        description = "Forces an update of the Business Continuity Plan (BCP) endpoint status. Requires ROLE_ADMIN authority."
+    )
     @PostMapping("/bcp", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun updateBcpStatus() {
         val principal = SecurityContextHolder.getContext().authentication?.principal as? User

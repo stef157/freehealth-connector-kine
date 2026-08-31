@@ -2,15 +2,15 @@ package org.taktik.connector.technical.utils;
 
 import org.taktik.connector.technical.exception.TechnicalConnectorException;
 import org.taktik.connector.technical.exception.TechnicalConnectorExceptionValues;
-import javax.xml.soap.MessageFactory;
-import javax.xml.soap.SOAPBody;
-import javax.xml.soap.SOAPEnvelope;
-import javax.xml.soap.SOAPException;
-import javax.xml.soap.SOAPFactory;
-import javax.xml.soap.SOAPFault;
-import javax.xml.soap.SOAPMessage;
-import javax.xml.soap.SOAPPart;
-import javax.xml.ws.soap.SOAPFaultException;
+import jakarta.xml.soap.MessageFactory;
+import jakarta.xml.soap.SOAPBody;
+import jakarta.xml.soap.SOAPEnvelope;
+import jakarta.xml.soap.SOAPException;
+import jakarta.xml.soap.SOAPFactory;
+import jakarta.xml.soap.SOAPFault;
+import jakarta.xml.soap.SOAPMessage;
+import jakarta.xml.soap.SOAPPart;
+import jakarta.xml.ws.soap.SOAPFaultException;
 
 public class SOAPUtils {
    private static final MessageFactory MF;
@@ -37,7 +37,9 @@ public class SOAPUtils {
          SOAPPart soapPart = response.getSOAPPart();
          SOAPEnvelope soapEnvelope = soapPart.getEnvelope();
          SOAPBody soapBody = soapEnvelope.getBody();
-         soapBody.addDocument(ConnectorXmlUtils.toDocument(payload));
+         org.w3c.dom.Document payloadDoc = ConnectorXmlUtils.toDocument(payload);
+         org.w3c.dom.Node importedNode = soapPart.importNode(payloadDoc.getDocumentElement(), true);
+         soapBody.appendChild(importedNode);
          return response;
       } catch (Exception ex) {
          throw new TechnicalConnectorException(TechnicalConnectorExceptionValues.ERROR_TECHNICAL, ex);

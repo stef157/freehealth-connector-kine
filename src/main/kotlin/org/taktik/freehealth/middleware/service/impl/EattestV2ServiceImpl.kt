@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -83,9 +83,10 @@ import be.fgov.ehealth.technicalconnector.signature.SignatureBuilderFactory
 import be.fgov.ehealth.technicalconnector.signature.domain.SignatureVerificationError
 import be.fgov.ehealth.technicalconnector.signature.domain.SignatureVerificationResult
 import be.fgov.ehealth.technicalconnector.signature.transformers.EncapsulationTransformer
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.apache.commons.codec.binary.Base64
-import org.apache.commons.lang.StringUtils
+import org.apache.commons.lang3.StringUtils
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.context.SecurityContextHolder
@@ -133,7 +134,7 @@ import java.math.RoundingMode
 import java.util.ArrayList
 import java.util.HashMap
 import java.util.UUID
-import javax.xml.bind.JAXBContext
+import jakarta.xml.bind.JAXBContext
 import javax.xml.namespace.NamespaceContext
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.transform.TransformerException
@@ -150,10 +151,9 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
     private val config = ConfigFactory.getConfigValidator(listOf())
     private val freehealthEattestService: org.taktik.connector.business.eattest.EattestService = org.taktik.connector.business.eattest.impl.EattestServiceImpl()
     private val eAttestErrors =
-        Gson().fromJson(
-            this.javaClass.getResourceAsStream("/be/errors/eAttestErrors.json").reader(Charsets.UTF_8),
-            arrayOf<MycarenetError>().javaClass
-                       ).associateBy({ it.uid }, { it })
+        ObjectMapper().readValue<Array<MycarenetError>>(
+            this.javaClass.getResourceAsStream("/be/errors/eAttestErrors.json")!!
+        ).associateBy({ it.uid }, { it })
     private val xPathFactory = XPathFactory.newInstance()
 
     fun NodeList.forEach(action: (Node) -> Unit) {
@@ -1393,7 +1393,7 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
         xpath.namespaceContext = object : NamespaceContext {
             override fun getNamespaceURI(prefix: String?) = "http://www.ehealth.fgov.be/standards/kmehr/schema/v1"
             override fun getPrefix(namespaceURI: String?) = "ns1"
-            override fun getPrefixes(namespaceURI: String?): Iterator<Any?> =
+            override fun getPrefixes(namespaceURI: String?): Iterator<String> =
                 if (namespaceURI == "http://www.ehealth.fgov.be/standards/kmehr/schema/v1") listOf("ns1").iterator() else listOf<String>().iterator()
         }
         return when {

@@ -71,8 +71,8 @@ import org.taktik.freehealth.middleware.service.STSService
 import org.w3c.dom.Element
 import org.w3c.dom.NodeList
 import java.util.*
-import javax.xml.bind.JAXBContext
-import javax.xml.ws.soap.SOAPFaultException
+import jakarta.xml.bind.JAXBContext
+import jakarta.xml.ws.soap.SOAPFaultException
 import kotlin.collections.firstOrNull
 import kotlin.jvm.java
 import kotlin.let
@@ -212,7 +212,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
 
                 gender.let {
                     this.gender = PhoneticGender().apply {
-                        if (gender?.toUpperCase() == "MALE"){
+                        if (gender?.uppercase() == "MALE"){
                             this.genderCode = "M"
                         }else{
                             this.genderCode = "F"
@@ -314,7 +314,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                                         if(!it.isNullOrEmpty()){
                                             countryNames.add(LocalizedDescriptionType().apply {
                                                 value = it
-                                                lang = mid?.language?.toUpperCase()
+                                                lang = mid?.language?.uppercase()
                                             })
                                         }
                                     }
@@ -325,7 +325,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                                     it.cityName?.let {
                                         cityNames.add(LocalizedDescriptionType().apply {
                                             value = it
-                                            lang = mid?.language?.toUpperCase()
+                                            lang = mid?.language?.uppercase()
                                         })
                                     }
                                     it.countryIsoCode.let {
@@ -338,7 +338,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
 
                     mid.gender?.let {
                         gender = GenderInfoDeclarationType().apply {
-                           if(it?.toUpperCase() == "MALE"){
+                           if(it?.uppercase() == "MALE"){
                                this.genderCode = "M"
                            }else{
                                this.genderCode = "F"
@@ -373,7 +373,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                                 it.streetName?.let {
                                     this.streetName = LocalizedDescriptionType().apply {
                                         value = it
-                                        lang = mid?.language?.toUpperCase()
+                                        lang = mid?.language?.uppercase()
                                     }
                                 }
                                 it.houseNumber?.let {
@@ -400,7 +400,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                             it.countryName.let {
                                 LocalizedDescriptionType().apply {
                                     value = it
-                                    lang = mid?.language?.toUpperCase()
+                                    lang = mid?.language?.uppercase()
                                 }
                             }
                             it.cityCode.let{
@@ -409,7 +409,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                             it.cityName?.let {
                                 this.cityName = LocalizedDescriptionType().apply {
                                     value = it
-                                    lang = mid?.language?.toUpperCase()
+                                    lang = mid?.language?.uppercase()
                                 }
                             }
                             it.postalCode.let {
@@ -419,7 +419,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                             it.streetName?.let {
                                 this.streetName = LocalizedDescriptionType().apply {
                                     value = it
-                                    lang = mid?.language?.toUpperCase()
+                                    lang = mid?.language?.uppercase()
                                 }
                             }
                             it.typeCode?.let {

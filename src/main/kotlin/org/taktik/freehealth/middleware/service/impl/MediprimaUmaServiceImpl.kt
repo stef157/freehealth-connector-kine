@@ -12,7 +12,7 @@ import be.fgov.ehealth.mediprimaUma.protocol.v1.SearchUrgentMedicalAidAttestatio
 import be.fgov.ehealth.mediprimaUma.protocol.v1.SearchUrgentMedicalAidAttestationResponseType
 import be.fgov.ehealth.mediprimaUma.protocol.v1.SendUrgentMedicalAidAttestationRequestType
 import be.fgov.ehealth.mediprimaUma.protocol.v1.SendUrgentMedicalAidAttestationResponseType
-import ma.glasnost.orika.MapperFacade
+import org.taktik.freehealth.middleware.mapper.MapperFacade
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.taktik.connector.technical.config.ConfigFactory
@@ -31,8 +31,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.GregorianCalendar
 import java.util.UUID
-import javax.xml.bind.JAXBContext
-import javax.xml.bind.Marshaller
+import jakarta.xml.bind.JAXBContext
+import jakarta.xml.bind.Marshaller
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
 

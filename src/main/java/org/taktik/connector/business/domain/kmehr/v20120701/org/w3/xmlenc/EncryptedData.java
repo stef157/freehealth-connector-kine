@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. Taktik SA, All rights reserved.
+ * Copyright (c) 2020. iCure SA, All rights reserved.
  */
 
 //
@@ -13,10 +13,10 @@
 package org.taktik.connector.business.domain.kmehr.v20120701.org.w3.xmlenc;
 
 import java.io.Serializable;
-import javax.xml.bind.annotation.XmlAccessType;
-import javax.xml.bind.annotation.XmlAccessorType;
-import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.bind.annotation.XmlType;
+import jakarta.xml.bind.annotation.XmlAccessType;
+import jakarta.xml.bind.annotation.XmlAccessorType;
+import jakarta.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlType;
 
 
 /**

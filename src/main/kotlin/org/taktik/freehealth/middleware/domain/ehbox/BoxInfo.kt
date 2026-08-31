@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.domain.ehbox
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.io.Serializable
 
 /**
@@ -29,6 +30,7 @@ import java.io.Serializable
  * Time: 11:05
  * To change this template use File | Settings | File Templates.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class BoxInfo : Serializable {
     var boxId: String? = null
     var quality: String? = null

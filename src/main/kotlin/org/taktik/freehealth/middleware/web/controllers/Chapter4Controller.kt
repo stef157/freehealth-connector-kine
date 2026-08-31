@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,8 @@
 
 package org.taktik.freehealth.middleware.web.controllers
 
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -40,72 +42,55 @@ import org.taktik.freehealth.middleware.service.Chapter4Service
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.*
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletResponse
 import org.apache.commons.io.IOUtils
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.ResponseBody
 import java.net.URL
 
+/**
+ * REST controller for Belgian Chapter IV prior authorization operations.
+ *
+ * Chapter IV of the Belgian INAMI/RIZIV nomenclature governs the reimbursement of special
+ * or expensive medications that require prior authorization from the patient's insurance
+ * organization (mutuality). This controller exposes endpoints to consult, request, cancel,
+ * and close Chapter IV agreement requests via the eHealth platform.
+ *
+ * All endpoints require a valid PKCS12 keystore and SAML token, provided via HTTP headers.
+ */
 @RestController
 @RequestMapping("/chap4")
+@Tag(name = "Chapter4", description = "Belgian Chapter IV prior authorization for special medications requiring approval from insurance organizations.")
 class Chapter4Controller(private val chapter4Service: Chapter4Service) {
     val log = LoggerFactory.getLogger(this .javaClass)
 
-    @GetMapping("/sam/docpreviews/{chapterName}/{paragraphName}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
-    fun getAddedDocuments(
-        @PathVariable chapterName: String,
-        @PathVariable paragraphName: String): List<AddedDocumentPreview> =
-        chapter4Service.getAddedDocuments(chapterName, paragraphName)
-
-    @GetMapping("/sam/docpreview/{chapterName}/{paragraphName}/{verseSeq}/{docSeq}/{language}", produces = ["application/octet-stream"])
-    @ResponseBody
-    fun getAddedDocument(
-        @PathVariable chapterName: String,
-        @PathVariable paragraphName: String,
-        @PathVariable verseSeq: Long,
-        @PathVariable docSeq: Long,
-        @PathVariable language: String,
-        response : HttpServletResponse) {
-        val url = chapter4Service.getAddedDocuments(chapterName, paragraphName).find {d -> d.documentSeq == docSeq && d.verseSeq == verseSeq}?.addressUrl
-        url?.let { response.contentType = MediaType.APPLICATION_PDF_VALUE
-            val url = URL(it.replace("@lng@",language))
-            val inputStream = url.openStream()
-            IOUtils.copy(inputStream, response.outputStream)
-            inputStream.close()
-        }
-    }
-
-    @GetMapping("/sam/search/{searchString}/{language}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
-    fun findParagraphs(
-        @PathVariable searchString: String,
-        @PathVariable language: String): List<ParagraphPreview> =
-        chapter4Service.findParagraphs(searchString, language)
-
-    @GetMapping("/sam/bycnk/{cnk}/{language}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
-    fun findParagraphsWithCnk(
-        @PathVariable cnk: Long,
-        @PathVariable language: String): List<ParagraphPreview> =
-        chapter4Service.findParagraphsWithCnk(cnk, language)
-
-    @GetMapping("/sam/mpps/{chapterName}/{paragraphName}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
-    fun getMppsForParagraph(
-        @PathVariable chapterName: String,
-        @PathVariable paragraphName: String) : List<MppPreview> =
-        chapter4Service.getMppsForParagraph(chapterName, paragraphName)
-
-    @GetMapping("/sam/vtms/{chapterName}/{paragraphName}/{language}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
-    fun getVtmNamesForParagraph(
-        @PathVariable chapterName: String,
-        @PathVariable paragraphName: String,
-        @PathVariable language: String) : List<String> =
-        chapter4Service.getVtmNamesForParagraph(chapterName, paragraphName, language)
-
-    @GetMapping("/sam/info/{chapterName}/{paragraphName}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
-    fun getParagraphInfos(
-        @PathVariable chapterName: String,
-        @PathVariable paragraphName: String) : ParagraphInfos? =
-        chapter4Service.getParagraphInfos(chapterName, paragraphName)
-
+    /**
+     * Retrieves existing Chapter IV agreement requests for a given patient. The results can
+     * optionally be filtered by CIVICS paragraph, date range, and agreement reference.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpSsin healthcare provider's SSIN (social security identification number)
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param patientSsin patient's social security identification number
+     * @param patientDateOfBirth patient's date of birth as epoch milliseconds
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param civicsVersion optional CIVICS version to use for the consultation
+     * @param paragraph optional Chapter IV paragraph number to filter by
+     * @param start optional start of the date range filter as epoch milliseconds; defaults to 15 days ago
+     * @param end optional end of the date range filter as epoch milliseconds
+     * @param reference optional agreement reference to filter by
+     * @return the Chapter IV agreement consultation response containing matching agreement requests
+     */
+    @Operation(
+        summary = "Consult agreement requests",
+        description = "Retrieves existing Chapter IV agreement requests for a given patient, optionally filtered by paragraph, date range, and reference."
+    )
     @GetMapping("/consult/{patientSsin}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun agreementRequestsConsultation(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -143,6 +128,40 @@ class Chapter4Controller(private val chapter4Service: Chapter4Service) {
         end = end,
         reference = reference)
 
+    /**
+     * Sends a new Chapter IV prior authorization request to the insurance organization for a
+     * specific CIVICS paragraph and medication. The request includes patient demographics,
+     * the targeted paragraph and verses, and any supporting appendices (clinical justification
+     * documents).
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param patientSsin patient's social security identification number
+     * @param patientDateOfBirth patient's date of birth as epoch milliseconds
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param requestType the type of agreement request (e.g. "newrequest", "extension", "noncontinuousextension")
+     * @param civicsVersion CIVICS version identifying the drug reimbursement context
+     * @param paragraph Chapter IV paragraph number for which authorization is requested
+     * @param verses optional comma-separated list of verse numbers within the paragraph
+     * @param incomplete optional flag indicating whether the request is submitted as incomplete
+     * @param start optional start date of the requested agreement period as epoch milliseconds; defaults to 15 days ago
+     * @param end optional end date of the requested agreement period as epoch milliseconds
+     * @param decisionReference optional reference to a previous decision by the insurance organization
+     * @param ioRequestReference optional reference assigned by the insurance organization to a prior request
+     * @param appendices list of supporting documents (clinical justifications, reports) for the authorization request
+     * @return the Chapter IV agreement response from the insurance organization
+     */
+    @Operation(
+        summary = "Request a new agreement",
+        description = "Sends a new Chapter IV prior authorization request to the insurance organization for a specific paragraph and medication."
+    )
     @PostMapping("/new/{patientSsin}/{civicsVersion}/{requestType}/{paragraph}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun requestAgreement(@RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
                          @RequestHeader(name = "X-FHC-tokenId") tokenId: UUID,
@@ -192,6 +211,30 @@ class Chapter4Controller(private val chapter4Service: Chapter4Service) {
             ioRequestReference = ioRequestReference,
             appendices = appendices)
 
+    /**
+     * Cancels an existing Chapter IV agreement request. The agreement to cancel is identified
+     * by either the decision reference or the insurance organization request reference.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param patientSsin patient's social security identification number
+     * @param patientDateOfBirth patient's date of birth as epoch milliseconds
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param decisionReference optional reference to the decision issued by the insurance organization
+     * @param iorequestReference optional reference assigned by the insurance organization to the original request
+     * @return the Chapter IV cancellation response from the insurance organization
+     */
+    @Operation(
+        summary = "Cancel an agreement",
+        description = "Cancels an existing Chapter IV agreement request identified by decision reference or IO request reference."
+    )
     @DeleteMapping("/cancel/{patientSsin}")
     fun cancelAgreement(@RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
                         @RequestHeader(name = "X-FHC-tokenId") tokenId: UUID,
@@ -224,6 +267,30 @@ class Chapter4Controller(private val chapter4Service: Chapter4Service) {
             iorequestReference = iorequestReference
                                        )
 
+    /**
+     * Closes an approved Chapter IV agreement, ending the authorization period. This is used
+     * when the treatment covered by the agreement is no longer needed or has been completed.
+     * The agreement is identified by its decision reference.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param patientSsin patient's social security identification number
+     * @param patientDateOfBirth patient's date of birth as epoch milliseconds
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param decisionReference reference to the decision issued by the insurance organization identifying the agreement to close
+     * @return the Chapter IV close response from the insurance organization
+     */
+    @Operation(
+        summary = "Close an agreement",
+        description = "Closes an approved Chapter IV agreement using its decision reference, ending the authorization period."
+    )
     @DeleteMapping("/close/{patientSsin}")
     fun closeAgreement(@RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
                        @RequestHeader(name = "X-FHC-tokenId") tokenId: UUID,

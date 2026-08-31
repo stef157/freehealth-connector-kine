@@ -91,7 +91,8 @@ import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.Properties
 import java.util.UUID
-import javax.xml.bind.JAXBContext
+import jakarta.xml.bind.JAXBContext
+import org.taktik.connector.business.domain.newXMLGregorianCalendar
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
 
@@ -126,7 +127,7 @@ class RecipeServiceImplTest {
     }
 
 
-    val kmehrHelper = KmehrHelper(Properties().apply { load(javaClass.getResourceAsStream("/org/taktik/connector/business/recipe/validation.properties")) })
+    val kmehrHelper = KmehrHelper(Properties().apply { load(Thread.currentThread().contextClassLoader.getResourceAsStream("org/taktik/connector/business/recipe/validation.properties")) })
 
     @Test
     fun validatePrescription() {
@@ -171,7 +172,7 @@ class RecipeServiceImplTest {
 		val daytime = toDaytime(RegimenItem().apply {
 			timeOfDay = 120000
 		})
-		assertEquals(XMLGregorianCalendarImpl.parse("12:00:00"), daytime.time)
+		assertEquals(newXMLGregorianCalendar("12:00:00"), daytime.time)
 	}
 
 	@Test
@@ -179,7 +180,7 @@ class RecipeServiceImplTest {
 		val daytime = toDaytime(RegimenItem().apply {
 			dayPeriod = Code("CD-DAYPERIOD", "afternoon")
 		})
-		assertEquals(XMLGregorianCalendarImpl.parse("16:00:00"), daytime.time)
+		assertEquals(newXMLGregorianCalendar("16:00:00"), daytime.time)
 	}
 
 	@Test
@@ -187,7 +188,7 @@ class RecipeServiceImplTest {
 		val daytime = toDaytime(RegimenItem().apply {
 			dayPeriod = Code("CD-DAYPERIOD", "evening")
 		})
-		assertEquals(XMLGregorianCalendarImpl.parse("19:00:00"), daytime.time)
+		assertEquals(newXMLGregorianCalendar("19:00:00"), daytime.time)
 	}
 
 	@Test
@@ -195,7 +196,7 @@ class RecipeServiceImplTest {
 		val daytime = toDaytime(RegimenItem().apply {
 			dayPeriod = Code("CD-DAYPERIOD", "night")
 		})
-		assertEquals(XMLGregorianCalendarImpl.parse("22:00:00"), daytime.time)
+		assertEquals(newXMLGregorianCalendar("22:00:00"), daytime.time)
 	}
 
 	@Test(expected = IllegalArgumentException::class)

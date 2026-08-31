@@ -1,26 +1,28 @@
 package org.taktik.freehealth.middleware
 
-import org.springframework.boot.autoconfigure.web.ResourceProperties
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.boot.autoconfigure.web.ServerProperties
+import org.springframework.boot.autoconfigure.web.WebProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.converter.HttpMessageConverter
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity
-import org.springframework.web.servlet.HandlerExceptionResolver
 import org.springframework.web.servlet.config.annotation.ContentNegotiationConfigurer
 import org.springframework.web.servlet.config.annotation.EnableWebMvc
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
-import org.taktik.freehealth.middleware.web.ExecuterTimeInterceptor
+import org.taktik.freehealth.middleware.web.ExecutorTimeInterceptor
 
 @Configuration
 @EnableWebMvc
 @EnableGlobalMethodSecurity(jsr250Enabled = true)
 @ComponentScan
-@EnableConfigurationProperties(ServerProperties::class, ResourceProperties::class)
-class WebMvcConfigurer(val resourceProperties: ResourceProperties) : WebMvcConfigurer {
+@EnableConfigurationProperties(ServerProperties::class, WebProperties::class)
+class WebMvcConfigurer(val webProperties: WebProperties, val objectMapper: ObjectMapper) : WebMvcConfigurer {
     private val SERVLET_LOCATIONS = arrayOf("/")
 
 
@@ -37,12 +39,12 @@ class WebMvcConfigurer(val resourceProperties: ResourceProperties) : WebMvcConfi
     }
 
     override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
-        val cachePeriod = this.resourceProperties.cache.period
-        val cacheControl = this.resourceProperties.cache
+        val cachePeriod = this.webProperties.resources.cache.period
+        val cacheControl = this.webProperties.resources.cache
             .cachecontrol.toHttpCacheControl()
 
         registry.addResourceHandler("/**")
-            .addResourceLocations(*getResourceLocations(this.resourceProperties.staticLocations))
+            .addResourceLocations(*getResourceLocations(this.webProperties.resources.staticLocations))
             .setCachePeriod(cachePeriod?.seconds?.toInt() ?: 3600)
             .setCacheControl(cacheControl)
     }
@@ -55,8 +57,17 @@ class WebMvcConfigurer(val resourceProperties: ResourceProperties) : WebMvcConfi
         return locations.filterNotNull().toTypedArray()
     }
 
+    override fun extendMessageConverters(converters: MutableList<HttpMessageConverter<*>>) {
+        // Remove Smile HTTP converter (auto-configured because jackson-dataformat-smile is on the
+        // classpath via the Elasticsearch transitive dependency). Controllers must only return JSON.
+        converters.removeIf { it.supportedMediaTypes.any { mt -> mt.subtype.contains("smile") } }
+        // Replace default JSON converter with one backed by our configured ObjectMapper
+        converters.removeIf { it is MappingJackson2HttpMessageConverter }
+        converters.add(MappingJackson2HttpMessageConverter(objectMapper))
+    }
+
     override fun addInterceptors(registry: InterceptorRegistry) {
-        registry.addInterceptor(ExecuterTimeInterceptor()).addPathPatterns("/**")
+        registry.addInterceptor(ExecutorTimeInterceptor()).addPathPatterns("/**")
     }
 
 }

@@ -13,8 +13,8 @@ import be.fgov.ehealth.commons.protocol.v2.StatusResponseType
 import org.taktik.freehealth.middleware.dto.ExceptionDto
 import java.io.EOFException
 import java.util.Date
-import javax.servlet.http.HttpServletRequest
-import javax.xml.ws.soap.SOAPFaultException
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.xml.ws.soap.SOAPFaultException
 
 /**
  * Defines custom exception handlers.

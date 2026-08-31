@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,9 +20,11 @@
 
 package org.taktik.freehealth.middleware.domain.consent
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.dto.common.KmehrId
 import java.io.Serializable
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class PatientId : Serializable {
     var ids: List<KmehrId> = mutableListOf()
 }

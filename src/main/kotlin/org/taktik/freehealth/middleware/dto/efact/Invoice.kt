@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -18,9 +18,11 @@
 
 package org.taktik.freehealth.middleware.dto.efact
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.domain.common.Patient
 import java.util.LinkedList
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Invoice {
     var patient: Patient? = null
     var ioCode: String? = null

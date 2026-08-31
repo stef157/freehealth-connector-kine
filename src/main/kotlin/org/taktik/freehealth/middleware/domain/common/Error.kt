@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,4 +20,6 @@
 
 package org.taktik.freehealth.middleware.domain.common
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Error(var code: String? = null, var descr: String? = null, var url: String? = null, var zone: String? = null, var codeDescription: Map<String, String>? = null)

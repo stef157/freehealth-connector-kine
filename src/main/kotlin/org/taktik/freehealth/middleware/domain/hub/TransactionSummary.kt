@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.domain.hub
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.dto.common.AuthorDto
 import org.taktik.freehealth.middleware.dto.common.KmehrCd
 import org.taktik.freehealth.middleware.dto.common.KmehrId
@@ -33,6 +34,7 @@ import java.io.Serializable
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class TransactionSummary : Serializable {
     var ids: List<KmehrId> = mutableListOf()
     var cds: List<KmehrCd> = mutableListOf()

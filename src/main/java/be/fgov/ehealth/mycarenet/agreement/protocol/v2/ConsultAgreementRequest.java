@@ -2,7 +2,7 @@ package be.fgov.ehealth.mycarenet.agreement.protocol.v2;
 
 import be.fgov.ehealth.mycarenet.commons.protocol.v4.SendRequestType;
 
-import javax.xml.bind.annotation.XmlRootElement;
+import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(
    name = "ConsultAgreementRequest",

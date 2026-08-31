@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,10 +20,12 @@
 
 package org.taktik.freehealth.middleware.dto.consent
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import be.fgov.ehealth.standards.kmehr.cd.v1.CDCONSENT
 import org.taktik.freehealth.middleware.dto.common.AuthorWithPatientDto
 import org.taktik.freehealth.middleware.dto.common.KmehrPatientDto
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class ConsentTypeDto {
     var patient: KmehrPatientDto? = null
     var cds: List<CDCONSENT>? = null

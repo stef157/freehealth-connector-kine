@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -76,19 +76,12 @@ class Document : Serializable {
 
     @Throws(UnsealConnectorException::class)
     fun getContent(): ByteArray {
-
-        var byteContent = ByteArray(0)
-
-        if(this.content != null){
-            byteContent = Arrays.clone(this.content)
-        }
-
-        return byteContent
+        return this.content?.clone() ?:ByteArray(0)
 
     }
 
     fun setContent(content: ByteArray?) {
-        this.content = content?.let { Arrays.clone(it) }
+        this.content = content?.clone()
     }
 
     @Throws(TechnicalConnectorException::class)

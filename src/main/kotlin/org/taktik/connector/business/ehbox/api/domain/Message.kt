@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -81,7 +81,7 @@ abstract class Message<T> : Serializable {
                 ).generateId()
         } catch (var5: TechnicalConnectorException) {
             val time = System.nanoTime()
-            val identifier = java.lang.Long.toString(time, 36).toUpperCase()
+            val identifier = java.lang.Long.toString(time, 36).uppercase()
             this.publicationId = identifier
         }
     }

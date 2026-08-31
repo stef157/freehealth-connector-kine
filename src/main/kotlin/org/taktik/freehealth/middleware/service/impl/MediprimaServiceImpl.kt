@@ -35,9 +35,8 @@ import be.fgov.ehealth.standards.kmehr.schema.v1.AuthorType
 import be.fgov.ehealth.standards.kmehr.schema.v1.ContentType
 import be.fgov.ehealth.standards.kmehr.schema.v1.HcpartyType
 import be.fgov.ehealth.standards.kmehr.schema.v1.ItemType
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import ma.glasnost.orika.MapperFacade
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.apache.commons.logging.LogFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
@@ -78,9 +77,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.*
-import javax.xml.bind.JAXBContext
-import javax.xml.bind.JAXBElement
-import javax.xml.bind.Marshaller
+import jakarta.xml.bind.JAXBContext
+import jakarta.xml.bind.JAXBElement
+import jakarta.xml.bind.Marshaller
 import javax.xml.datatype.DatatypeConstants
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
@@ -89,6 +88,7 @@ import javax.xml.namespace.QName
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathFactory
+import org.taktik.freehealth.middleware.mapper.MapperFacade
 
 @Service
 class MediprimaServiceImpl(val stsService: STSService, keyDepotService: KeyDepotService, val mapper: MapperFacade) : MediprimaService {
@@ -99,9 +99,8 @@ class MediprimaServiceImpl(val stsService: STSService, keyDepotService: KeyDepot
     private val config = ConfigFactory.getConfigValidator(listOf())
     private val freehealthTarificationService = org.taktik.connector.business.tarification.impl.TarificationServiceImpl()
     private val ConsultTarifErrors =
-        Gson().fromJson(
-            this.javaClass.getResourceAsStream("/be/errors/ConsultTarificationMediprimaErrors.json").reader(Charsets.UTF_8),
-            arrayOf<MycarenetError>().javaClass
+        ObjectMapper().readValue<Array<MycarenetError>>(
+            this.javaClass.getResourceAsStream("/be/errors/ConsultTarificationMediprimaErrors.json")!!
         ).associateBy({ it.uid }, { it })
     private val xPathfactory = XPathFactory.newInstance()
 
@@ -526,7 +525,7 @@ class MediprimaServiceImpl(val stsService: STSService, keyDepotService: KeyDepot
                 else -> null
             }
 
-            override fun getPrefixes(namespaceURI: String?): Iterator<Any?> =
+            override fun getPrefixes(namespaceURI: String?): Iterator<String> =
                 when (namespaceURI) {
                     "http://www.ehealth.fgov.be/messageservices/core/v1" -> listOf("ns2").iterator()
                     "http://www.ehealth.fgov.be/standards/kmehr/schema/v1" -> listOf("ns3").iterator()

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,8 @@
 
 package org.taktik.freehealth.middleware.dto.mycarenet
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+@JsonIgnoreProperties(ignoreUnknown = true)
 class MycarenetError(
     var uid: String? = null,
     var path: String? = null,

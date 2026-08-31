@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.dto.common
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import org.taktik.freehealth.utils.FailSafeEnumDeserializer
 import java.io.Serializable
@@ -35,8 +36,9 @@ enum class Gender constructor(val code: String) : Serializable {
 
     companion object {
         fun fromCode(code: String?): Gender? =
-            if (code == null) null else Gender.values().firstOrNull { it.code == code.substring(0,1).toUpperCase() }
+            if (code == null) null else Gender.values().firstOrNull { it.code == code.substring(0,1).uppercase() }
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class GenderDeserializer: FailSafeEnumDeserializer<Gender>(Gender::class.java, Gender.unknown)

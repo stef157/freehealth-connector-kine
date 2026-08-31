@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,13 +20,14 @@
 
 package org.taktik.freehealth.middleware.dao
 
-import com.google.gson.Gson
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.springframework.stereotype.Repository
 import org.taktik.freehealth.middleware.dto.Code
-import org.w3._2000._09.xmldsig.RetrievalMethod
 
 @Repository
-class CodeDao(gson: Gson) {
+@JsonIgnoreProperties(ignoreUnknown = true)
+class CodeDao {
+    @JsonIgnoreProperties(ignoreUnknown = true)
     class CodesMap {
         val version: String? = null
         val date: String? = null

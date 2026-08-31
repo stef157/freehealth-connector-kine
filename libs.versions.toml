@@ -1,0 +1,26 @@
+[versions]
+springBoot = "3.5.13"
+bouncyCastle = "1.71.1"
+kotlin = "2.2.0"
+netty = "4.1.132.Final"
+
+[libraries]
+reactorNetty = { group = "io.projectreactor.netty", name = "reactor-netty" }
+kotlinxCoroutinesReactor = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor" }
+bouncyCastleBcmail = { group = "org.bouncycastle", name = "bcmail-jdk18on", version.ref = "bouncyCastle" }
+bouncyCastleBcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncyCastle" }
+
+kotlinStandardLibrary = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
+
+[bundles]
+bouncyCastleLibs = ["bouncyCastleBcprov", "bouncyCastleBcmail"]
+
+[plugins]
+kotlin = { id = "org.jetbrains.kotlin", version.ref = "kotlin" }
+kotlinAllOpen = { id = "org.jetbrains.kotlin.plugin.allopen", version.ref = "kotlin" }
+kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+springBootPlugin = { id = "org.springframework.boot", version.ref = "springBoot" }
+springBootDependenciesManagement = { id = "io.spring.dependency-management", version = "1.1.7" }
+mavenRepository = { id = "com.taktik.gradle.maven-repository", version = "1.0.7" }
+helmRepository = { id = "com.taktik.gradle.helm-repository", version = "0.2.24-g9f69211aad" }
+licenceReport = { id = "com.github.jk1.dependency-license-report", version = "2.0"}

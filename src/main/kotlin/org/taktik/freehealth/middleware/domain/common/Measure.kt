@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,11 +20,13 @@
 
 package org.taktik.freehealth.middleware.domain.common
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import org.taktik.freehealth.middleware.dto.Code
 import java.io.Serializable
 
 @JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Measure : Serializable {
     var value: Double? = null
 

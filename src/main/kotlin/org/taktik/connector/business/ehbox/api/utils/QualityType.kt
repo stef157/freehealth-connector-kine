@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -149,11 +149,11 @@ class QualityType private constructor(val quality: String, val identifierType: I
         }
 
         fun valueOf(key: String): QualityType {
-            return predefinedQual!![key.toUpperCase().replace("INSS".toRegex(), "SSIN")] as QualityType
+            return predefinedQual!![key.uppercase().replace("INSS".toRegex(), "SSIN")] as QualityType
         }
 
         fun valueOf(quality: String, type: String): QualityType {
-            return predefinedQual!![(quality + "_" + type).toUpperCase().replace(
+            return predefinedQual!![(quality + "_" + type).uppercase().replace(
                 "INSS".toRegex(),
                 "SSIN"
             )] as QualityType

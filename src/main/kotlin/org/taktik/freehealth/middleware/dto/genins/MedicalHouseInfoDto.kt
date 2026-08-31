@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.dto.genins
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.io.Serializable
 
 /**
@@ -29,6 +30,7 @@ import java.io.Serializable
  * Time: 10:59
  * To change this template use File | Settings | File Templates.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class MedicalHouseInfoDto(
     val periodStart: Long? = null,
     val periodEnd: Long? = null,

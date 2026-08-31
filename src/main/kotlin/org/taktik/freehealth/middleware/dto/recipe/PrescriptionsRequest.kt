@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,11 +20,13 @@
 
 package org.taktik.freehealth.middleware.dto.recipe
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.domain.recipe.Medication
 import org.taktik.freehealth.middleware.domain.common.Patient
 import org.taktik.freehealth.middleware.dto.HealthcareParty
 import java.time.LocalDateTime
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class PrescriptionsRequest(
     var patient: Patient? = null,
     var hcp: HealthcareParty? = null,

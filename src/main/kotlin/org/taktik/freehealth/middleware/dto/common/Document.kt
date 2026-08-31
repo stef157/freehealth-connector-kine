@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,12 +20,14 @@
 
 package org.taktik.freehealth.middleware.dto.common
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.domain.common.SigningValue
 import java.io.Serializable
 
 /**
  * Created by aduchate on 8/11/13, 15:53
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Document(
     val title: String? = null,
     val content: ByteArray? = null,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -18,6 +18,7 @@
 
 package org.taktik.freehealth.middleware.domain.common.messages
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 /**
  * Created with IntelliJ IDEA.
  * User: aduchate
@@ -25,6 +26,7 @@ package org.taktik.freehealth.middleware.domain.common.messages
  * Time: 17:50
  * To change this template use File | Settings | File Templates.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 open class AbstractMessage {
     var context: String? = null
     var subContext: String? = null

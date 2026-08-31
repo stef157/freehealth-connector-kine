@@ -6,7 +6,7 @@ import be.fgov.ehealth.mediprimaUma.core.v1.StatusResponseType;
 
 import java.util.ArrayList;
 import java.util.List;
-import javax.xml.bind.annotation.*;
+import jakarta.xml.bind.annotation.*;
 
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -18,7 +18,7 @@
 
 package org.taktik.freehealth.middleware.format.efact.segments
 
-import org.apache.commons.lang.StringUtils
+import org.apache.commons.lang3.StringUtils
 import java.lang.IllegalArgumentException
 
 class ZoneDescription private constructor(

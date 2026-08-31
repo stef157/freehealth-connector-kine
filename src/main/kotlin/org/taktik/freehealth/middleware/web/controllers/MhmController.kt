@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,8 @@
 
 package org.taktik.freehealth.middleware.web.controllers
 
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
 import be.fgov.ehealth.mycarenet.mhm.protocol.v1.SendSubscriptionResponse
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -47,10 +49,19 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
-import javax.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletRequest
 
+/**
+ * REST controller for Medical House Management (MHM) operations.
+ *
+ * Medical houses (maisons medicales) use a capitation-based payment model where patients
+ * subscribe to receive care. This controller provides endpoints to manage patient subscriptions:
+ * starting new subscriptions, cancelling existing ones, and notifying about subscription closures.
+ * All operations communicate with the MyCarenet platform.
+ */
 @RestController
 @RequestMapping("/mhm")
+@Tag(name = "MHM", description = "Medical House Management. Manages registration and administration for medical houses (maisons medicales), including subscription start, cancellation, and closure notifications.")
 class MhmController(val mhmService: MhmService) {
     @Value("\${mycarenet.timezone}")
     internal val mcnTimezone: String = "Europe/Brussels"
@@ -66,11 +77,41 @@ class MhmController(val mhmService: MhmService) {
     fun handleBadRequest(req: HttpServletRequest, ex: Exception): String = ex.message ?: "unknown reason"
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
-    @ExceptionHandler(javax.xml.ws.soap.SOAPFaultException::class)
+    @ExceptionHandler(jakarta.xml.ws.soap.SOAPFaultException::class)
     @ResponseBody
-    fun handleBadRequest(req: HttpServletRequest, ex: javax.xml.ws.soap.SOAPFaultException): String = ex.message ?: "unknown reason"
+    fun handleBadRequest(req: HttpServletRequest, ex: jakarta.xml.ws.soap.SOAPFaultException): String = ex.message ?: "unknown reason"
 
 
+    /**
+     * Registers a new patient subscription to a medical house (maison medicale).
+     *
+     * Sends a subscription request to the MyCarenet platform with the patient's details,
+     * subscription start date, and signature type. The patient can be identified either by
+     * their SSIN or by their insurance organization (IO) and membership number.
+     * Supports trial subscriptions and recovery mode for resubmitting previously failed requests.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpNihii NIHII number of the medical house
+     * @param hcpName name of the medical house
+     * @param patientFirstName first name of the patient being subscribed
+     * @param patientLastName last name of the patient being subscribed
+     * @param patientGender gender of the patient (e.g., "male", "female")
+     * @param startDate subscription start date in YYYYMMDD integer format
+     * @param signatureType type of signature used for the subscription request
+     * @param isTrial optional flag indicating whether this is a trial subscription; defaults to false
+     * @param patientSsin optional social security number of the patient
+     * @param io optional insurance organization code for the patient
+     * @param ioMembership optional membership number within the insurance organization
+     * @param isRecovery optional flag indicating recovery mode for resubmission; defaults to false
+     * @param isTestForNotify optional flag for testing notification flow; defaults to false
+     * @return a [StartSubscriptionResultWithResponse] containing the subscription result and raw response, or null on failure
+     */
+    @Operation(
+        summary = "Send a medical house subscription",
+        description = "Registers a new patient subscription to a medical house (maison medicale). Sends the subscription request to the MyCarenet platform with patient details, start date, and signature type. Supports trial subscriptions and recovery mode."
+    )
     @PostMapping("/sendSubscription", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun sendSubscription(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -109,6 +150,30 @@ class MhmController(val mhmService: MhmService) {
             isTestForNotify = isTestForNotify ?: false)
     }
 
+    /**
+     * Cancels an existing patient subscription to a medical house.
+     *
+     * The subscription to cancel is identified by its reference number. The patient can be
+     * identified either by their SSIN or by their insurance organization (IO) and membership number.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpNihii NIHII number of the medical house
+     * @param hcpName name of the medical house
+     * @param patientFirstName first name of the patient
+     * @param patientLastName last name of the patient
+     * @param patientGender gender of the patient (e.g., "male", "female")
+     * @param reference reference number of the subscription to cancel
+     * @param patientSsin optional social security number of the patient
+     * @param io optional insurance organization code for the patient
+     * @param ioMembership optional membership number within the insurance organization
+     * @return a [CancelSubscriptionResultWithResponse] containing the cancellation result and raw response, or null on failure
+     */
+    @Operation(
+        summary = "Cancel a medical house subscription",
+        description = "Cancels an existing patient subscription to a medical house. The subscription is identified by its reference number. Patient identification can be done via SSIN or via insurance organization (IO) and membership number."
+    )
     @PostMapping("/cancelSubscription", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun cancelSubscription(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -140,6 +205,10 @@ class MhmController(val mhmService: MhmService) {
       )
     }
 
+    @Operation(
+        summary = "Notify closure of a medical house subscription",
+        description = "Sends a notification about the closure of an existing patient subscription to a medical house. Requires the subscription reference, end date, reason for closure, and the decision type. Used to formally end a patient's registration with a medical house."
+    )
     @PostMapping("/notifySubscriptionClosure", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun notifySubscriptionClosure(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,

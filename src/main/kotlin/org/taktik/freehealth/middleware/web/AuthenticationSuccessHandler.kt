@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -22,9 +22,9 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler
 import org.springframework.transaction.annotation.Transactional
 import java.io.IOException
-import javax.servlet.ServletException
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.ServletException
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 
 @Transactional
 class AuthenticationSuccessHandler : SimpleUrlAuthenticationSuccessHandler() {

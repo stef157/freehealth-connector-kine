@@ -1,11 +1,12 @@
 package org.taktik.freehealth.middleware.web.controllers
 
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.junit.Test
 
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.web.server.LocalServerPort
+import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Import
@@ -26,7 +27,7 @@ class EagreementControllerTest : EhealthTest() {
     @Autowired
     private val restTemplate: TestRestTemplate? = null
 
-    private val gson = Gson()
+    private val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
 
     @Test
     fun createSynchronousAgreementRequest() {

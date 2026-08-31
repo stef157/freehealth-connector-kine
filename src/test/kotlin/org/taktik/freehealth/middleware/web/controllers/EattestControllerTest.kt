@@ -1,12 +1,14 @@
 package org.taktik.freehealth.middleware.web.controllers
 
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.assertj.core.api.Assertions
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.web.server.LocalServerPort
+import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Import
@@ -46,7 +48,7 @@ class EattestControllerTest : EhealthTest() {
 
         results.forEachIndexed { index, it ->
             Assertions.assertThat(it?.length ?: 0 > 2 && it!!.startsWith("{"))
-            val res = Gson().fromJson(it, SendAttestResult::class.java)
+            val res = ObjectMapper().registerModule(KotlinModule.Builder().build()).configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false).readValue(it, SendAttestResult::class.java)
             println("${oas[index]}: ${res.invoicingNumber ?: "-"}")
             res.acknowledge?.errors?.forEach {
                 println(it.locFr + " : " + it.msgFr)

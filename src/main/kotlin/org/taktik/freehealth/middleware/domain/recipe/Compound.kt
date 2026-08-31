@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,8 +20,10 @@
 
 package org.taktik.freehealth.middleware.domain.recipe
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.dto.Code
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class Compound(
     var substanceProduct: Substance? = null,
     var medicinalProduct: Medicinalproduct? = null,

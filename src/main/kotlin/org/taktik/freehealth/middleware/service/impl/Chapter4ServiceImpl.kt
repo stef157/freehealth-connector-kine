@@ -12,7 +12,8 @@ import be.fgov.ehealth.medicalagreement.core.v1.Kmehrrequest
 import be.fgov.ehealth.medicalagreement.core.v1.Kmehrresponse
 import be.fgov.ehealth.standards.kmehr.cd.v1.CDERRORschemes
 import be.fgov.ehealth.standards.kmehr.schema.v1.Kmehrmessage
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.apache.commons.logging.LogFactory
 import org.joda.time.DateTime
 import org.springframework.security.core.context.SecurityContextHolder
@@ -113,10 +114,8 @@ import org.taktik.connector.technical.utils.IdentifierType
 import org.taktik.connector.technical.utils.MarshallerHelper
 import org.taktik.connector.technical.validator.impl.EhealthReplyValidatorImpl
 import org.taktik.freehealth.middleware.dao.User
-import org.taktik.freehealth.middleware.domain.common.messages.AbstractMessage
 import org.taktik.freehealth.middleware.drugs.civics.AddedDocumentPreview
 import org.taktik.freehealth.middleware.drugs.civics.ParagraphPreview
-import org.taktik.freehealth.middleware.drugs.logic.DrugsLogic
 import org.taktik.freehealth.middleware.dto.mycarenet.CommonOutput
 import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetConversation
 import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetError
@@ -143,7 +142,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Arrays
 import java.util.Date
 import java.util.UUID
-import javax.xml.bind.JAXBContext
+import jakarta.xml.bind.JAXBContext
 import javax.xml.namespace.NamespaceContext
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.xpath.XPathConstants
@@ -152,7 +151,7 @@ import javax.xml.xpath.XPathExpressionException
 import javax.xml.xpath.XPathFactory
 
 @Service
-class Chapter4ServiceImpl(private val stsService: STSService, private val drugsLogic: DrugsLogic, private val kgssService: KgssServiceImpl, private val keyDepotService: KeyDepotService) : Chapter4Service {
+class Chapter4ServiceImpl(private val stsService: STSService, private val kgssService: KgssServiceImpl, private val keyDepotService: KeyDepotService) : Chapter4Service {
     private val freehealthChapter4Service: org.taktik.connector.business.chapterIV.service.ChapterIVService =
         org.taktik.connector.business.chapterIV.service.impl.ChapterIVServiceImpl(EhealthReplyValidatorImpl())
 
@@ -165,31 +164,19 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
         "chapterIV.keydepot.identifiervalue"))
 
     val chapter4ConsultationWarnings =
-        Gson().fromJson(this.javaClass.getResourceAsStream("/be/errors/Chapter4ConsultationWarnings.json").reader(Charsets.UTF_8), arrayOf<MycarenetError>().javaClass).associateBy({ it.uid!! }, { it })
+        ObjectMapper().readValue<Array<MycarenetError>>(this.javaClass.getResourceAsStream("/be/errors/Chapter4ConsultationWarnings.json")!!).associateBy({ it.uid!! }, { it })
     val chapter4ConsultationErrors =
-        Gson().fromJson(this.javaClass.getResourceAsStream("/be/errors/Chapter4ConsultationErrors.json").reader(Charsets.UTF_8), arrayOf<MycarenetError>().javaClass).associateBy({ it.uid!! }, { it })
+        ObjectMapper().readValue<Array<MycarenetError>>(this.javaClass.getResourceAsStream("/be/errors/Chapter4ConsultationErrors.json")!!).associateBy({ it.uid!! }, { it })
     val chapter4AgreementWarnings =
-        Gson().fromJson(this.javaClass.getResourceAsStream("/be/errors/Chapter4AgreementWarnings.json").reader(Charsets.UTF_8), arrayOf<MycarenetError>().javaClass).associateBy({ it.uid!! }, { it })
+        ObjectMapper().readValue<Array<MycarenetError>>(this.javaClass.getResourceAsStream("/be/errors/Chapter4AgreementWarnings.json")!!).associateBy({ it.uid!! }, { it })
     val chapter4AgreementErrors =
-        Gson().fromJson(this.javaClass.getResourceAsStream("/be/errors/Chapter4AgreementErrors.json").reader(Charsets.UTF_8), arrayOf<MycarenetError>().javaClass).associateBy({ it.uid!! }, { it })
+        ObjectMapper().readValue<Array<MycarenetError>>(this.javaClass.getResourceAsStream("/be/errors/Chapter4AgreementErrors.json")!!).associateBy({ it.uid!! }, { it })
     val chapter4AgreementRefusalJustifications =
-        Gson().fromJson(this.javaClass.getResourceAsStream("/be/errors/Chapter4AgreementRefusalJustifications.json").reader(Charsets.UTF_8), arrayOf<MycarenetError>().javaClass).associateBy({ it.uid!! }, { it })
+        ObjectMapper().readValue<Array<MycarenetError>>(this.javaClass.getResourceAsStream("/be/errors/Chapter4AgreementRefusalJustifications.json")!!).associateBy({ it.uid!! }, { it })
     val xPathfactory = XPathFactory.newInstance()
 
 
     private val log = LogFactory.getLog(this::class.java)
-
-    override fun findParagraphs(searchString: String, language: String): List<ParagraphPreview> = drugsLogic.findParagraphs(searchString, language)
-
-    override fun findParagraphsWithCnk(cnk: Long?, language: String): List<ParagraphPreview> = drugsLogic.findParagraphsWithCnk(cnk, language)
-
-    override fun getParagraphInfos(chapterName: String, paragraphName: String) = drugsLogic.getParagraphInfos(chapterName, paragraphName)
-
-    override fun getMppsForParagraph(chapterName: String, paragraphName: String) = drugsLogic.getMppsForParagraph(chapterName, paragraphName)
-
-    override fun getVtmNamesForParagraph(chapterName: String, paragraphName: String, language: String) = drugsLogic.getVtmNamesForParagraph(chapterName, paragraphName, language) ?: listOf()
-
-    override fun getAddedDocuments(chapterName: String, paragraphName: String): List<AddedDocumentPreview> = drugsLogic.getAddedDocuments(chapterName, paragraphName)
 
     private fun buildOriginType(nihii: String, ssin: String, firstName: String, lastName: String): OriginType =
         OriginType().apply {
@@ -460,7 +447,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                         rt.soapRequest?.writeTo(this.soapResponseOutputStream())
                         this.transactionRequest = v1Message?.let {
                             MarshallerHelper(Kmehrrequest::class.java, Kmehrrequest::class.java).toXMLByteArray(Kmehrrequest().apply { this.kmehrmessage = it })
-                        }.toString(Charsets.UTF_8)
+                        }?.toString(Charsets.UTF_8)
                     }
                     rt.returnInfo?.let { ri ->
                         this.errors = this.errors?.let { it + listOf(MycarenetError(code = ri.faultCode, path = ri.faultSource, msgFr = ri.message.value, msgNl = ri.message.value))}
@@ -483,10 +470,10 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                     response.soapResponse?.writeTo(this.soapResponseOutputStream())
                     this.transactionRequest = v1Message?.let {
                         MarshallerHelper(Kmehrrequest::class.java, Kmehrrequest::class.java).toXMLByteArray(Kmehrrequest().apply { this.kmehrmessage = it })
-                    }.toString(Charsets.UTF_8)
+                    }?.toString(Charsets.UTF_8)
                     this.transactionResponse = kmehrResponse?.let {
                         MarshallerHelper(Kmehrresponse::class.java, Kmehrresponse::class.java).toXMLByteArray(it)
-                    }.toString(Charsets.UTF_8)
+                    }?.toString(Charsets.UTF_8)
                 }
             }
             agreementResponse.isAcknowledged = kmehrResponse.acknowledge != null && kmehrResponse.acknowledge.isIscomplete
@@ -595,7 +582,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                         rt.soapRequest?.writeTo(this.soapResponseOutputStream())
                         this.transactionRequest = v1Message?.let {
                             MarshallerHelper(Kmehrrequest::class.java, Kmehrrequest::class.java).toXMLByteArray(Kmehrrequest().apply { this.kmehrmessage = it })
-                        }.toString(Charsets.UTF_8)
+                        }?.toString(Charsets.UTF_8)
                     }
                     rt.returnInfo?.let { ri ->
                         this.errors = this.errors?.let { it + listOf(MycarenetError(code = ri.faultCode, path = ri.faultSource, msgFr = ri.message.value, msgNl = ri.message.value))}
@@ -623,10 +610,10 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                     response.soapResponse?.writeTo(this.soapResponseOutputStream())
                     this.transactionRequest = v1Message?.let {
                         MarshallerHelper(Kmehrrequest::class.java, Kmehrrequest::class.java).toXMLByteArray(Kmehrrequest().apply { this.kmehrmessage = it })
-                    }.toString(Charsets.UTF_8)
+                    }?.toString(Charsets.UTF_8)
                     this.transactionResponse = retrievedKmehrResponse.kmehrresponse?.let {
                         MarshallerHelper(Kmehrresponse::class.java, Kmehrresponse::class.java).toXMLByteArray(it)
-                    }.toString(Charsets.UTF_8)
+                    }?.toString(Charsets.UTF_8)
                 }
             }
             val ack = retrievedKmehrResponse.kmehrresponse.acknowledge
@@ -771,7 +758,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                         rt.soapRequest?.writeTo(this.soapResponseOutputStream())
                         this.transactionRequest = v1Message?.let {
                             MarshallerHelper(Kmehrrequest::class.java, Kmehrrequest::class.java).toXMLByteArray(Kmehrrequest().apply { this.kmehrmessage = it })
-                        }.toString(Charsets.UTF_8)
+                        }?.toString(Charsets.UTF_8)
                     }
                     rt.returnInfo?.let { ri ->
                         this.errors = this.errors?.let { it + listOf(MycarenetError(code = ri.faultCode, path = ri.faultSource, msgFr = ri.message.value, msgNl = ri.message.value))}
@@ -795,10 +782,10 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                     response.soapRequest?.writeTo(this.soapResponseOutputStream())
                     this.transactionRequest = v1Message?.let {
                         MarshallerHelper(Kmehrrequest::class.java, Kmehrrequest::class.java).toXMLByteArray(Kmehrrequest().apply { this.kmehrmessage = it })
-                    }.toString(Charsets.UTF_8)
+                    }?.toString(Charsets.UTF_8)
                     this.transactionResponse = retrievedKmehrResponse.kmehrresponse?.let {
                         MarshallerHelper(Kmehrresponse::class.java, Kmehrresponse::class.java).toXMLByteArray(it)
-                    }.toString(Charsets.UTF_8)
+                    }?.toString(Charsets.UTF_8)
                 }
             }
             agreementResponse.isAcknowledged = retrievedKmehrResponse.kmehrresponse.acknowledge.isIscomplete
@@ -1501,7 +1488,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val drugsL
                 else -> null
             }
 
-            override fun getPrefixes(namespaceURI: String?): Iterator<Any?> =
+            override fun getPrefixes(namespaceURI: String?): Iterator<String> =
                 when (namespaceURI) {
                     "http://www.ehealth.fgov.be/standards/kmehr/schema/v1" -> listOf("ns3").iterator()
                     else -> listOf<String>().iterator()

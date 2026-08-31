@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -35,9 +35,10 @@ import be.fgov.ehealth.standards.kmehr.schema.v1.HcpartyType
 import be.fgov.ehealth.standards.kmehr.schema.v1.Kmehrmessage
 import be.fgov.ehealth.standards.kmehr.schema.v1.PersonType
 import be.fgov.ehealth.standards.kmehr.schema.v1.SexType
-import com.google.gson.Gson
-import ma.glasnost.orika.MapperFacade
-import org.apache.commons.lang.StringUtils
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.taktik.freehealth.middleware.mapper.MapperFacade
+import org.apache.commons.lang3.StringUtils
 import org.joda.time.DateTime
 import org.springframework.stereotype.Service
 import org.taktik.connector.business.domain.Error
@@ -74,9 +75,8 @@ class HubServiceImpl(private val stsService: STSService, private val keyDepotSer
     private val freehealthHubService: org.taktik.connector.business.hubv3.service.HubTokenService =
         org.taktik.connector.business.hubv3.service.impl.HubTokenServiceImpl(keyDepotService)
     private val nisCodesPerZip =
-        Gson().fromJson<Map<String, String>>(
-            this.javaClass.getResourceAsStream("/NisCodes.json").bufferedReader(Charsets.UTF_8),
-            HashMap<String, String>().javaClass
+        ObjectMapper().readValue<Map<String, String>>(
+            this.javaClass.getResourceAsStream("/NisCodes.json")!!
         )
 
     override fun getHcPartyConsent(

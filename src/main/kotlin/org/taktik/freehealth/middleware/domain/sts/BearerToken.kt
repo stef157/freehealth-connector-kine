@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,7 +20,9 @@
 
 package org.taktik.freehealth.middleware.domain.sts
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.io.Serializable
 import java.util.*
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class BearerToken(var token:String) : Serializable

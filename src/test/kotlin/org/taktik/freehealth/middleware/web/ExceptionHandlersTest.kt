@@ -4,10 +4,8 @@ import org.junit.Assert
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.actuate.metrics.web.servlet.WebMvcTags
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
-import org.springframework.boot.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.core.MethodParameter
 import org.springframework.http.HttpStatus
@@ -28,9 +26,10 @@ import org.taktik.freehealth.middleware.exception.MissingKeystoreException
 import org.taktik.freehealth.middleware.exception.MissingTokenException
 import java.util.*
 import javax.xml.namespace.QName
-import javax.xml.soap.SOAPConstants
-import javax.xml.soap.SOAPFactory
-import javax.xml.ws.soap.SOAPFaultException
+import jakarta.xml.soap.SOAPConstants
+import jakarta.xml.soap.SOAPFactory
+import jakarta.xml.ws.soap.SOAPFaultException
+import org.springframework.boot.test.web.server.LocalServerPort
 
 @RunWith(SpringRunner::class)
 @Import(MyTestsConfiguration::class)
@@ -115,7 +114,9 @@ class ExceptionHandlersTest {
 
         override fun beforeBodyWrite(body: Any?, returnType: MethodParameter, selectedContentType: MediaType, selectedConverterType: Class<out HttpMessageConverter<*>>, request: ServerHttpRequest, response: ServerHttpResponse): Any? {
             if (request is ServletServerHttpRequest && response is ServletServerHttpResponse) {
-                response.headers.add("X-WebMvcTags-uri", WebMvcTags.uri(request.servletRequest, response.servletResponse).value)
+                val uriPattern = request.servletRequest.getAttribute(org.springframework.web.servlet.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE)?.toString()
+                    ?: request.servletRequest.requestURI
+                response.headers.add("X-WebMvcTags-uri", uriPattern)
             }
 
             return body

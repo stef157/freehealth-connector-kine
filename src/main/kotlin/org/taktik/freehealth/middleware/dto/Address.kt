@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,9 +20,11 @@
 
 package org.taktik.freehealth.middleware.dto
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.io.Serializable
 import java.util.*
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class Address(
     var addressType: AddressType? = AddressType.home,
     var street: String? = null,

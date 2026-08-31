@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,7 +20,8 @@
 
 package org.taktik.freehealth.middleware.web.controllers
 
-import ma.glasnost.orika.MapperFacade
+import jakarta.servlet.http.HttpServletRequest
+import org.taktik.freehealth.middleware.mapper.MapperFacade
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -36,14 +37,16 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.taktik.freehealth.middleware.dto.consultrnv2.RnConsultSearchPersonBySsinResponseDto
 import org.taktik.freehealth.middleware.dto.consultrnv2.RnConsultSearchPersonPhoneticallyResponseDto
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.taktik.freehealth.middleware.dto.consultrnv2.RnConsultPersonMid
 import org.taktik.freehealth.middleware.exception.MissingTokenException
 import org.taktik.freehealth.middleware.service.RnConsultService
 import java.util.*
-import javax.servlet.http.HttpServletRequest
 
 @RestController
 @RequestMapping("/rnconsult")
+@Tag(name = "RnConsult", description = "Consult the Belgian National Registry (v2) to search, verify, and register person identity information.")
 class RnConsultController(val rnConsultService: RnConsultService, val mapper: MapperFacade){
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     @ExceptionHandler(MissingTokenException::class)
@@ -56,10 +59,14 @@ class RnConsultController(val rnConsultService: RnConsultService, val mapper: Ma
     fun handleBadRequest(req: HttpServletRequest, ex: Exception): String = ex.message ?: "unknown reason"
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
-    @ExceptionHandler(javax.xml.ws.soap.SOAPFaultException::class)
+    @ExceptionHandler(jakarta.xml.ws.soap.SOAPFaultException::class)
     @ResponseBody
-    fun handleBadRequest(req: HttpServletRequest, ex: javax.xml.ws.soap.SOAPFaultException): String = ex.message ?: "unknown reason"
+    fun handleBadRequest(req: HttpServletRequest, ex: jakarta.xml.ws.soap.SOAPFaultException): String = ex.message ?: "unknown reason"
 
+    @Operation(
+        summary = "Search a person by SSIN",
+        description = "Looks up a person's identity information in the Belgian National Registry using their SSIN (social security identification number)."
+    )
     @GetMapping("/bySsin/{ssin}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun searchPersonBySsin(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -75,6 +82,10 @@ class RnConsultController(val rnConsultService: RnConsultService, val mapper: Ma
         )
      }
 
+    @Operation(
+        summary = "Search persons phonetically",
+        description = "Performs a phonetic search in the Belgian National Registry using date of birth and last name, with optional filters for first name, gender, country, city, and tolerance."
+    )
     @GetMapping("/phonetically/{dateOfBirth}/{lastName}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun searchPersonPhonetically(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -108,6 +119,10 @@ class RnConsultController(val rnConsultService: RnConsultService, val mapper: Ma
         )
     }
 
+    @Operation(
+        summary = "Register a person in the National Registry",
+        description = "Registers a new person in the Belgian National Registry using the provided identity information."
+    )
     @PostMapping("", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun registerPerson(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -121,6 +136,10 @@ class RnConsultController(val rnConsultService: RnConsultService, val mapper: Ma
         mid
     )
 
+    @Operation(
+        summary = "Consult current SSIN history",
+        description = "Retrieves the current SSIN and history of SSIN changes for a person from the Belgian National Registry."
+    )
     @GetMapping("/history/{ssin}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun consultCurrentSsin(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -134,6 +153,10 @@ class RnConsultController(val rnConsultService: RnConsultService, val mapper: Ma
         ssin
     )
 
+    @Operation(
+        summary = "Verify a person's identity",
+        description = "Verifies a person's identity in the Belgian National Registry using SSIN, card number, or barcode."
+    )
     @GetMapping("/verifyId", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun verifyId(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,

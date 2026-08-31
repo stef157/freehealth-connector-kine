@@ -49,7 +49,6 @@ import be.recipe.services.prescriber.ValidationPropertiesParam
 import be.recipe.services.prescriber.ValidationPropertiesResult
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import com.sun.xml.internal.ws.client.ClientTransportException
 import org.apache.commons.lang3.StringUtils
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
@@ -94,6 +93,7 @@ import java.util.concurrent.TimeUnit
 import javax.xml.parsers.DocumentBuilder
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.parsers.ParserConfigurationException
+import jakarta.xml.ws.WebServiceException
 import javax.xml.xpath.XPath
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathExpressionException
@@ -123,15 +123,13 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
         prescriptionType: String
     ): KeyResult? {
         val cacheId = "($nihii#$patientId#$prescriptionType)"
-        return keyCache.get(cacheId) {
-            getNewKeyFromKgss(
-                credential,
-                prescriptionType,
-                nihii,
-                patientId,
-                stsService.getHolderOfKeysEtk(credential, nihii)!!.encoded
-            )
-        }
+        return keyCache.getIfPresent(cacheId) ?: getNewKeyFromKgss(
+            credential,
+            prescriptionType,
+            nihii,
+            patientId,
+            stsService.getHolderOfKeysEtk(credential, nihii)!!.encoded
+        )?.also { keyCache.put(cacheId, it) }
     }
 
     /**
@@ -187,7 +185,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                     checkStatus(response)
                 }
             }
-        } catch (cte: ClientTransportException) {
+        } catch (cte: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.prescriber"), cte)
         }?.also {
             getKeyFromKgss(
@@ -343,8 +341,8 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
         val errors = ArrayList<String>()
         try {
             kmehrHelper.assertValidKmehrPrescription(prescription, prescriptionType)
-        } catch (var7: IntegrationModuleValidationException) {
-            errors.addAll(var7.validationErrors)
+        } catch (e: IntegrationModuleValidationException) {
+            errors.addAll(e.validationErrors)
         }
         validateExpirationDateFromKmehr(prescription, errors, expirationDateFromRequest)
         if (errors.isNotEmpty()) {
@@ -393,7 +391,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                 ).unsealWithSymmKey(response.securedGetPrescriptionStatusResponse.securedContent, recipeSymmKey)
                     .also { checkStatus(it) }
             }
-        } catch (ex: ClientTransportException) {
+        } catch (ex: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.executor"), ex)
         }
     } catch (err: Throwable) {
@@ -430,7 +428,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                 helper.unsealWithSymmKey(response.securedListFeedbacksResponse.securedContent, recipeSymmKey)
                     .also { checkStatus(it) }
             }
-        } catch (cte: ClientTransportException) {
+        } catch (cte: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.prescriber"), cte)
         }.feedbacks.map {
             ListFeedbackItem(it).apply {
@@ -481,7 +479,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                 ).unsealWithSymmKey(response.securedListRidsHistoryResponse.securedContent, recipeSymmKey)
                     .also { checkStatus(it) }
             }
-        } catch (cte: ClientTransportException) {
+        } catch (cte: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.executor"), cte)
         }
     } catch (t: Throwable) {
@@ -521,7 +519,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                 ).unsealWithSymmKey(response.securedListOpenRidsResponse.securedContent, recipeSymmKey)
                     .also { checkStatus(it) }
             }
-        } catch (cte: ClientTransportException) {
+        } catch (cte: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.executor"), cte)
         }
     } catch (t: Throwable) {
@@ -643,7 +641,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                     }
                 )
             }
-        } catch (cte: ClientTransportException) {
+        } catch (cte: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.executor"), cte)
         }
     } catch (t: Throwable) {
@@ -775,7 +773,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                     recipeSymmKey
                 ).also { checkStatus(it) }
             }
-        } catch (cte: ClientTransportException) {
+        } catch (cte: WebServiceException) {
             throw IntegrationModuleException(I18nHelper.getLabel("error.connection.prescriber"), cte)
         }
     } catch (t: Throwable) {
@@ -916,7 +914,7 @@ class PrescriberIntegrationModuleV4Impl(val stsService: STSService, keyDepotServ
                             this.recipeSymmKey
                         )
                     )
-                } catch (cte: ClientTransportException) {
+                } catch (cte: WebServiceException) {
                     throw IntegrationModuleException(I18nHelper.getLabel("error.connection.prescriber"), cte)
                 }
             }

@@ -1,13 +1,14 @@
 package org.taktik.freehealth.middleware.web.controllers
 
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.assertj.core.api.Assertions
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
-import org.springframework.boot.web.server.LocalServerPort
+import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.http.HttpEntity
@@ -30,7 +31,7 @@ class MemberDataAsyncControllerTest: EhealthTest() {
 
     @LocalServerPort
     private val port: Int = 0
-    private val gson = Gson()
+    private val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
 
     @Autowired
     private val restTemplate: TestRestTemplate? = null

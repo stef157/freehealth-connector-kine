@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -18,8 +18,10 @@
 
 package org.taktik.freehealth.middleware.dto.efact
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.io.Serializable
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class ErrorDetail : Serializable {
     var creationDate: Int = 0
     var errorCodeComment: String? = null

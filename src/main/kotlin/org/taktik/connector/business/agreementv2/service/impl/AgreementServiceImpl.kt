@@ -12,7 +12,7 @@ import org.taktik.connector.technical.exception.TechnicalConnectorException
 import org.taktik.connector.technical.exception.TechnicalConnectorExceptionValues
 import org.taktik.connector.technical.service.sts.security.SAMLToken
 import org.taktik.connector.technical.utils.impl.JaxbContextFactory
-import javax.xml.soap.SOAPException
+import jakarta.xml.soap.SOAPException
 
 /**
  * eAgreement v2 binding. Same two operations as v1, but the SOAP actions carry `:v2:` and the

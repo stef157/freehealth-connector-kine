@@ -1,9 +1,11 @@
 package org.taktik.freehealth.middleware.dto
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import java.util.*
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class ExceptionDto(
     val timestamp: Date,
     val status: Int,
@@ -25,8 +27,10 @@ class ExceptionDto(
         )
 
     fun toResponseEntity(): ResponseEntity<ExceptionDto> {
-        return ResponseEntity
-                .status(status)
-                .body(this)
+        val builder = ResponseEntity.status(status)
+        if (status == HttpStatus.UNAUTHORIZED.value()) {
+            builder.header("WWW-Authenticate", "Bearer")
+        }
+        return builder.body(this)
     }
 }

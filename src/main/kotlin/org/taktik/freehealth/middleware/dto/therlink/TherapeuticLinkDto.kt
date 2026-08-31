@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,10 +20,12 @@
 
 package org.taktik.freehealth.middleware.dto.therlink
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.dto.common.HcPartyDto
 import org.taktik.freehealth.middleware.dto.common.KmehrPatientDto
 import java.io.Serializable
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class TherapeuticLinkDto : Serializable {
     var patient: KmehrPatientDto? = null
     var hcParty: HcPartyDto? = null

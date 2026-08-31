@@ -1,7 +1,7 @@
 
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -21,7 +21,7 @@
 
 package org.taktik.freehealth.middleware
 
-import com.hazelcast.core.IMap
+import com.hazelcast.map.IMap
 import org.apache.commons.lang3.tuple.Pair
 import org.apache.commons.lang3.tuple.Triple
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager

@@ -11,7 +11,7 @@ import be.fgov.ehealth.mediprimaUma.protocol.v1.SendUrgentMedicalAidAttestationR
 import org.taktik.connector.technical.exception.TechnicalConnectorException
 import org.taktik.connector.technical.exception.TechnicalConnectorExceptionValues
 import org.taktik.connector.technical.service.sts.security.SAMLToken
-import javax.xml.soap.SOAPException
+import jakarta.xml.soap.SOAPException
 
 
 class MediprimaUmaServiceImpl : MediprimaUmaService{

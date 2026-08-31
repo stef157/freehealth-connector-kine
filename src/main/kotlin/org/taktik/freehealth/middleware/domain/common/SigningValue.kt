@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,8 +20,10 @@
 
 package org.taktik.freehealth.middleware.domain.common
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.io.Serializable
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class SigningValue : Serializable {
     var signingDownloadFileName: String? = null
     var textSigningContent: String? = null

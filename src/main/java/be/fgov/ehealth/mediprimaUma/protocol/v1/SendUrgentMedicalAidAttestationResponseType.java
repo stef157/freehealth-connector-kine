@@ -4,7 +4,7 @@ package be.fgov.ehealth.mediprimaUma.protocol.v1;
 import be.fgov.ehealth.mediprimaUma.core.v1.AttestationType;
 import be.fgov.ehealth.mediprimaUma.core.v1.StatusResponseType;
 
-import javax.xml.bind.annotation.*;
+import jakarta.xml.bind.annotation.*;
 
 
 /**

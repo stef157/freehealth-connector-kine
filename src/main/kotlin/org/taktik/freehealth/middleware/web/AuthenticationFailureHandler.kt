@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -21,9 +21,9 @@ package org.taktik.freehealth.middleware.web
 import org.springframework.security.core.AuthenticationException
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler
 
-import javax.servlet.ServletException
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.ServletException
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import java.io.IOException
 
 class AuthenticationFailureHandler : SimpleUrlAuthenticationFailureHandler() {

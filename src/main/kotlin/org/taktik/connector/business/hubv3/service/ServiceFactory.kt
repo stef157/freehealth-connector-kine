@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -22,14 +22,13 @@ package org.taktik.connector.business.hubv3.service
 
 import be.fgov.ehealth.etee.crypto.utils.KeyManager
 import org.taktik.connector.business.intrahubcommons.security.HubDecryptionHandler
-import org.taktik.connector.business.hubv3.service.impl.HubTokenServiceImpl
 import org.taktik.connector.technical.exception.TechnicalConnectorException
 import org.taktik.connector.technical.service.sts.security.SAMLToken
 import org.taktik.connector.technical.ws.domain.GenericRequest
 import org.taktik.connector.technical.ws.domain.HandlerChain
 import org.taktik.connector.technical.ws.domain.HandlerPosition
 import org.taktik.connector.technical.ws.domain.TokenType
-import org.apache.commons.lang.Validate
+import org.apache.commons.lang3.Validate
 import org.taktik.connector.technical.service.etee.CryptoFactory
 import org.taktik.connector.technical.service.sts.security.impl.KeyStoreCredential
 import java.security.KeyStore

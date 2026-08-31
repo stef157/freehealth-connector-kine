@@ -1,7 +1,8 @@
 package org.taktik.freehealth.middleware.web.controllers
 
-import io.swagger.annotations.ApiOperation
-import ma.glasnost.orika.MapperFacade
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
+import org.taktik.freehealth.middleware.mapper.MapperFacade
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -20,10 +21,23 @@ import org.taktik.freehealth.middleware.exception.MissingTokenException
 import org.taktik.freehealth.middleware.service.EagreementService
 import org.taktik.freehealth.middleware.service.impl.EagreementServiceImpl
 import java.util.*
-import javax.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletRequest
 
+/**
+ * REST controller for Belgian electronic agreement (eAgreement) operations.
+ *
+ * The eAgreement service allows healthcare providers to submit, consult, cancel, extend,
+ * complete, and argue prior authorization requests to insurance organizations for specific
+ * treatments (e.g. physiotherapy, speech therapy). This replaces the paper-based workflow
+ * with a fully electronic process via the MyCareNet platform.
+ *
+ * All endpoints require a valid PKCS12 keystore and SAML token, provided via HTTP headers.
+ * Patient identification can be done either by SSIN or by insurance organization (IO)
+ * code combined with a membership number.
+ */
 @RestController
 @RequestMapping("/eagreement")
+@Tag(name = "Eagreement", description = "Electronic agreement requests for prior authorization from insurance organizations for specific treatments.")
 class EagreementController(val eagreementService: EagreementService, val mapper: MapperFacade) {
     @Value("\${mycarenet.timezone}")
     internal val mcnTimezone: String = "Europe/Brussels"
@@ -39,9 +53,9 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
     fun handleBadRequest(req: HttpServletRequest, ex: Exception): String = ex.message ?: "unknown reason"
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
-    @ExceptionHandler(javax.xml.ws.soap.SOAPFaultException::class)
+    @ExceptionHandler(jakarta.xml.ws.soap.SOAPFaultException::class)
     @ResponseBody
-    fun handleBadRequest(req: HttpServletRequest, ex: javax.xml.ws.soap.SOAPFaultException): String =
+    fun handleBadRequest(req: HttpServletRequest, ex: jakarta.xml.ws.soap.SOAPFaultException): String =
         ex.message ?: "unknown reason"
 
     data class Attachment(
@@ -49,9 +63,46 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         val data: String
     )
 
-    @ApiOperation(
-        value = "Ask for a new agreement (eAgreement v2)",
-        notes = "Submits a new agreement request to the patient's insurer (OA/MC) over MyCareNet eAgreement v2. The decision may come back immediately, or later through the asynchronous channel when the medical adviser has to rule on it. hcpQuality must match the token's quality (e.g. physiotherapist)."
+    /**
+     * Submits a new electronic agreement request to the insurance organization for prior
+     * authorization of a specific treatment. The request includes pathology details,
+     * prescriber information, and optional prescription attachments.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpQuality provider quality/role (e.g. "doctor", "dentist", "physiotherapist")
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param prescriberNihii NIHII number of the prescribing healthcare provider
+     * @param prescriberFirstName prescriber's first name
+     * @param prescriberLastName prescriber's last name
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param pathologyStartDate start date of the pathology in yyyyMMdd integer format
+     * @param pathologyCode code identifying the pathology
+     * @param sctCode SNOMED CT code for the treatment
+     * @param prescriptionDate date of the prescription in yyyyMMdd integer format
+     * @param sctDisplay optional SNOMED CT display text for the treatment
+     * @param patientSsin optional patient's social security identification number
+     * @param patientIo optional insurance organization code for the patient
+     * @param patientIoMembership optional patient's membership number with the insurance organization
+     * @param orgNihii optional NIHII number of the healthcare organization
+     * @param organizationType optional type of the healthcare organization
+     * @param agreementStartDate optional requested start date of the agreement in yyyyMMdd integer format
+     * @param agreementEndDate optional requested end date of the agreement in yyyyMMdd integer format
+     * @param agreementType optional type of agreement being requested
+     * @param numberOfSessionForPrescription1 optional number of sessions for the first prescription
+     * @param numberOfSessionForPrescription2 optional number of sessions for the second prescription
+     * @param attachments optional list of attachments including prescriptions and supporting documents
+     * @return the electronic agreement response from the insurance organization, or null if no response
+     */
+    @Operation(
+        summary = "Ask for a new agreement (eAgreement v2)",
+        description = "Submits a new agreement request to the patient's insurer (OA/MC) over MyCareNet eAgreement v2. The decision may come back immediately, or later through the asynchronous channel when the medical adviser has to rule on it. hcpQuality must match the token's quality (e.g. physiotherapist)."
     )
     @PostMapping("/askAgreement", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun askAgreement(
@@ -127,9 +178,38 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
-    @ApiOperation(
-        value = "List the agreement decisions for one patient (eAgreement v2)",
-        notes = "Read-only consultation of the agreements known to the insurer for the given patient. subTypeCode selects the agreement family, e.g. physiotherapy. Identify the patient by ssin, or by the io/ioMembership pair."
+    /**
+     * Retrieves a list of existing electronic agreements for a patient, optionally filtered
+     * by date range, agreement type, and insurance reference. This allows healthcare providers
+     * to look up the current status and history of prior authorizations.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpQuality provider quality/role (e.g. "doctor", "dentist", "physiotherapist")
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpName healthcare provider's full name
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param subTypeCode sub-type code for the agreement consultation query
+     * @param insuranceRef optional insurance reference to look up a specific agreement
+     * @param patientSsin optional patient's social security identification number
+     * @param patientIo optional insurance organization code for the patient
+     * @param patientIoMembership optional patient's membership number with the insurance organization
+     * @param orgNihii optional NIHII number of the healthcare organization
+     * @param organizationType optional type of the healthcare organization
+     * @param agreementStartDate optional start date filter for agreements in yyyyMMdd integer format
+     * @param agreementEndDate optional end date filter for agreements in yyyyMMdd integer format
+     * @param agreementType optional agreement type filter
+     * @return the electronic agreement response containing the list of matching agreements, or null if no response
+     */
+    @Operation(
+        summary = "List the agreement decisions for one patient (eAgreement v2)",
+        description = "Read-only consultation of the agreements known to the insurer for the given patient. subTypeCode selects the agreement family, e.g. physiotherapy. Identify the patient by ssin, or by the io/ioMembership pair."
     )
     @PostMapping("/consultList", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun consultList(
@@ -185,9 +265,35 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
-    @ApiOperation(
-        value = "Cancel an agreement (eAgreement v2)",
-        notes = "Cancels an agreement previously granted by the insurer, identified by insuranceRef."
+    /**
+     * Cancels a previously submitted electronic agreement request using its insurance reference.
+     * This sends a cancellation message to the insurance organization via the MyCareNet platform.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpQuality provider quality/role (e.g. "doctor", "dentist", "physiotherapist")
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpName healthcare provider's full name
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param insuranceRef insurance reference identifying the agreement to cancel
+     * @param prescriptionDate date of the prescription in yyyyMMdd integer format
+     * @param patientSsin optional patient's social security identification number
+     * @param patientIo optional insurance organization code for the patient
+     * @param patientIoMembership optional patient's membership number with the insurance organization
+     * @param orgNihii optional NIHII number of the healthcare organization
+     * @param organizationType optional type of the healthcare organization
+     * @param agreementType optional type of the agreement being cancelled
+     * @return the electronic agreement cancellation response from the insurance organization, or null if no response
+     */
+    @Operation(
+        summary = "Cancel an agreement (eAgreement v2)",
+        description = "Cancels an agreement previously granted by the insurer, identified by insuranceRef."
     )
     @PostMapping("/cancelAgreement", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun cancelAgreement(
@@ -253,9 +359,47 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
-    @ApiOperation(
-        value = "Extend an existing agreement (eAgreement v2)",
-        notes = "Requests the extension of a running agreement, for the same pathology (pathologyCode / pathologyStartDate)."
+    /**
+     * Requests an extension of an existing electronic agreement, providing updated prescriptions
+     * and session details. This is used when the treatment authorized by a prior agreement needs
+     * to continue beyond its originally approved period.
+     *
+     * @param keystoreId UUID of the uploaded PKCS12 keystore
+     * @param tokenId UUID of the SAML authentication token
+     * @param passPhrase passphrase to decrypt the keystore's private key
+     * @param hcpQuality provider quality/role (e.g. "doctor", "dentist", "physiotherapist")
+     * @param hcpNihii NIHII number (unique Belgian healthcare provider identifier) of the requesting provider
+     * @param hcpSsin healthcare provider's SSIN
+     * @param hcpFirstName healthcare provider's first name
+     * @param hcpLastName healthcare provider's last name
+     * @param prescriberNihii NIHII number of the prescribing healthcare provider
+     * @param prescriberFirstName prescriber's first name
+     * @param prescriberLastName prescriber's last name
+     * @param patientFirstName patient's first name
+     * @param patientLastName patient's last name
+     * @param patientGender patient's gender (e.g. "male", "female")
+     * @param pathologyStartDate start date of the pathology in yyyyMMdd integer format
+     * @param pathologyCode code identifying the pathology
+     * @param insuranceRef insurance reference identifying the existing agreement to extend
+     * @param prescriptionDate date of the prescription in yyyyMMdd integer format
+     * @param sctCode optional SNOMED CT code for the treatment
+     * @param sctDisplay optional SNOMED CT display text for the treatment
+     * @param patientSsin optional patient's social security identification number
+     * @param patientIo optional insurance organization code for the patient
+     * @param patientIoMembership optional patient's membership number with the insurance organization
+     * @param orgNihii optional NIHII number of the healthcare organization
+     * @param organizationType optional type of the healthcare organization
+     * @param agreementStartDate optional requested start date of the extended agreement in yyyyMMdd integer format
+     * @param agreementEndDate optional requested end date of the extended agreement in yyyyMMdd integer format
+     * @param agreementType optional type of agreement being extended
+     * @param numberOfSessionForPrescription1 optional number of sessions for the first prescription
+     * @param numberOfSessionForPrescription2 optional number of sessions for the second prescription
+     * @param attachments optional list of attachments including prescriptions and supporting documents
+     * @return the electronic agreement extension response from the insurance organization, or null if no response
+     */
+    @Operation(
+        summary = "Extend an existing agreement (eAgreement v2)",
+        description = "Requests the extension of a running agreement, for the same pathology (pathologyCode / pathologyStartDate)."
     )
     @PostMapping("/extendAgreement", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun extendAgreement(
@@ -332,9 +476,9 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
-    @ApiOperation(
-        value = "Complete an agreement request (eAgreement v2)",
-        notes = "Supplies the additional information the insurer asked for on a pending request, identified by insuranceRef."
+    @Operation(
+        summary = "Complete an agreement request (eAgreement v2)",
+        description = "Supplies the additional information the insurer asked for on a pending request, identified by insuranceRef."
     )
     @PostMapping("/completeAgreement", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun completeAgreement(
@@ -408,9 +552,9 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
-    @ApiOperation(
-        value = "Argue an agreement decision (eAgreement v2)",
-        notes = "Sends supporting arguments or attachments contesting a decision, identified by insuranceRef."
+    @Operation(
+        summary = "Argue an agreement decision (eAgreement v2)",
+        description = "Sends supporting arguments or attachments contesting a decision, identified by insuranceRef."
     )
     @PostMapping("/argueAgreement", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun argueAgreement(
@@ -484,6 +628,10 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
+    @Operation(
+        summary = "Get agreement messages",
+        description = "Retrieves pending asynchronous electronic agreement messages (responses, notifications) for the healthcare provider."
+    )
     @PostMapping("async/getMessages", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun getMessageList(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -507,6 +655,10 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         )
     }
 
+    @Operation(
+        summary = "Confirm agreement messages",
+        description = "Confirms receipt of asynchronous electronic agreement messages, marking them as processed."
+    )
     @PostMapping("async/confirmMessage", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun confirmMessage(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,

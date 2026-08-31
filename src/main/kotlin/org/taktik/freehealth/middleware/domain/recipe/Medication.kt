@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,15 +20,17 @@
 
 package org.taktik.freehealth.middleware.domain.recipe
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.google.common.base.Joiner
-import org.apache.commons.lang.StringUtils
+import org.apache.commons.lang3.StringUtils
 import org.taktik.freehealth.middleware.dto.Code
 import java.io.Serializable
 import java.util.stream.Collectors
 
 @JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class Medication(
     @Deprecated(
         "retained for backward compatibility with the db",

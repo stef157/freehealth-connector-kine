@@ -2,9 +2,9 @@ package be.fgov.ehealth.mycarenet.agreement.protocol.v2;
 
 import be.fgov.ehealth.mycarenet.commons.protocol.v4.SendRequestType;
 import be.fgov.ehealth.mycarenet.commons.protocol.v4.SendResponseType;
-import javax.xml.bind.JAXBElement;
-import javax.xml.bind.annotation.XmlElementDecl;
-import javax.xml.bind.annotation.XmlRegistry;
+import jakarta.xml.bind.JAXBElement;
+import jakarta.xml.bind.annotation.XmlElementDecl;
+import jakarta.xml.bind.annotation.XmlRegistry;
 import javax.xml.namespace.QName;
 
 @XmlRegistry

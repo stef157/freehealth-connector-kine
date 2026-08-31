@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,9 +20,11 @@
 
 package org.taktik.freehealth.middleware.dto.ehbox
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.dto.common.Addressee
 import org.taktik.freehealth.middleware.dto.common.Document
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class NewsMessage(
     id: String? = null,
     publicationId: String? = null,

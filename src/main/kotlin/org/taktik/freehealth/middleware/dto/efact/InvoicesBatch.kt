@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -18,6 +18,7 @@
 
 package org.taktik.freehealth.middleware.dto.efact
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.sun.org.apache.xpath.internal.operations.Bool
 import java.util.LinkedList
 
@@ -28,6 +29,7 @@ import java.util.LinkedList
  * Time: 12:18
  * To change this template use File | Settings | File Templates.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class InvoicesBatch {
     var invoicingYear: Int = 0
     var invoicingMonth: Int = 0

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -17,6 +17,7 @@
  */
 
 package org.taktik.freehealth.middleware.dto.efact
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 /**
  * Created with IntelliJ IDEA.
  * User: aduchate
@@ -24,6 +25,7 @@ package org.taktik.freehealth.middleware.dto.efact
  * Time: 11:12
  * To change this template use File | Settings | File Templates.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class InvoiceItem {
     var dateCode: Long? = null
     var endDateCode: Long? = null

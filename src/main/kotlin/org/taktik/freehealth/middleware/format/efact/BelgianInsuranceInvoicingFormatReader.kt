@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -18,8 +18,8 @@
 
 package org.taktik.freehealth.middleware.format.efact
 
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.taktik.freehealth.middleware.domain.EfactError
 import org.taktik.freehealth.middleware.format.ReaderSession
 import org.taktik.freehealth.middleware.format.efact.segments.Record10Description
@@ -52,7 +52,7 @@ class BelgianInsuranceInvoicingFormatReader(private val language: String) {
 
     fun getErrorCodeDescription(errorCode: String, message: String?): String? {
         if (this.errorCodes == null) {
-            this.errorCodes = Gson().fromJson<List<EfactError>>(this.javaClass.getResourceAsStream("/be/errors/EfactErrors.json").reader(Charsets.UTF_8), object : TypeToken<ArrayList<EfactError>>() {}.type)
+            this.errorCodes = ObjectMapper().readValue<List<EfactError>>(this.javaClass.getResourceAsStream("/be/errors/EfactErrors.json")!!)
         }
         return errorCodes?.find { it.code == errorCode }?.let { c -> c.label[language]?.let { "${c.type}:$it${message?.let { "[$it]" } ?: ""}" } } ?: message
     }

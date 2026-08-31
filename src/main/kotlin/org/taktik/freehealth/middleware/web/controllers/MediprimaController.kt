@@ -1,8 +1,9 @@
 package org.taktik.freehealth.middleware.web.controllers
 
 import be.fgov.ehealth.mediprima.protocol.v2.ConsultCarmedInterventionResponseType
-import com.google.gson.Gson
-import ma.glasnost.orika.MapperFacade
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.taktik.freehealth.middleware.mapper.MapperFacade
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController
 import org.taktik.connector.business.domain.etarif.TarificationMediprimaConsultationResult
 import org.taktik.freehealth.middleware.domain.mediprima.MediprimaMdaResponse
 import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetError
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.taktik.freehealth.middleware.service.MediprimaService
 import java.time.Instant
 import java.time.LocalDate
@@ -26,17 +29,21 @@ internal val timezone: String = "Europe/Brussels"
 
 @RestController
 @RequestMapping("/mediprima")
+@Tag(name = "Mediprima", description = "Belgian social welfare healthcare system (CPAS/OCMW). Handles healthcare coverage for people on social welfare.")
 class MediprimaController(
     val mediprimaService: MediprimaService,
     val mapper: MapperFacade
 ) {
     internal val mcnTimezone: String = "Europe/Brussels"
     private val ConsultTarifErrors =
-        Gson().fromJson(
-            this.javaClass.getResourceAsStream("/be/errors/ConsultTarifErrors.json").reader(Charsets.UTF_8),
-            arrayOf<MycarenetError>().javaClass
+        ObjectMapper().readValue<Array<MycarenetError>>(
+            this.javaClass.getResourceAsStream("/be/errors/ConsultTarifErrors.json")!!
         ).associateBy({ it.uid }, { it })
 
+    @Operation(
+        summary = "Consult Mediprima care data",
+        description = "Consults the Mediprima (CPAS/OCMW) system for a patient's healthcare coverage data using their SSIN."
+    )
     @PostMapping("/consultMediprima/{patientSsin}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun consultMediprima(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -71,6 +78,10 @@ class MediprimaController(
     }
 
 
+    @Operation(
+        summary = "Consult Mediprima tarification",
+        description = "Consults the Mediprima tarification system to check coverage for specific medical procedure codes for a patient."
+    )
     @PostMapping("/consultTarificationMediprima/{patientSsin}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun consultMediprimaTarification(
         @PathVariable patientSsin: String,

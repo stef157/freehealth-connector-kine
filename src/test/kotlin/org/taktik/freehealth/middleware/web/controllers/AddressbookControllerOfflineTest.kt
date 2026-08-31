@@ -1,13 +1,13 @@
 package org.taktik.freehealth.middleware.web.controllers
 
-import com.google.gson.JsonParser
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
-import org.springframework.boot.web.server.LocalServerPort
+import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
@@ -19,7 +19,7 @@ import java.util.UUID
 
 /**
  * Offline checks on /ab/search/hcp: criteria validation happens before any eHealth call, so no keystore, no token
- * and no network are needed. Also asserts that the endpoint is published in the Swagger descriptor.
+ * and no network are needed. Also asserts that the endpoint is published in the OpenAPI descriptor.
  */
 @RunWith(SpringRunner::class)
 @Import(MyTestsConfiguration::class)
@@ -43,23 +43,24 @@ class AddressbookControllerOfflineTest {
 
     @Test
     fun searchHcpIsExposedInSwagger() {
-        val apiDocs = restTemplate!!.getForObject("http://localhost:$port/v2/api-docs", String::class.java)
-        val operation = JsonParser().parse(apiDocs).asJsonObject
-            .getAsJsonObject("paths").getAsJsonObject("/ab/search/hcp").getAsJsonObject("get")
-        Assertions.assertThat(operation.get("summary").asString).isNotEmpty()
-        Assertions.assertThat(operation.get("description").asString).contains("mutually exclusive")
+        // springdoc serves OpenAPI 3 at /v3/api-docs, where SpringFox served Swagger 2 at /v2/api-docs
+        val apiDocs = restTemplate!!.getForObject("http://localhost:$port/v3/api-docs", String::class.java)
+        val operation = ObjectMapper().readTree(apiDocs)
+            .get("paths").get("/ab/search/hcp").get("get")
+        Assertions.assertThat(operation.get("summary").asText()).isNotEmpty()
+        Assertions.assertThat(operation.get("description").asText()).contains("mutually exclusive")
 
-        val parameters = operation.getAsJsonArray("parameters").map { it.asJsonObject }
-        Assertions.assertThat(parameters.map { it.get("name").asString }).containsExactlyInAnyOrder(
+        val parameters = operation.get("parameters").toList()
+        Assertions.assertThat(parameters.map { it.get("name").asText() }).containsExactlyInAnyOrder(
             "X-FHC-keystoreId", "X-FHC-tokenId", "X-FHC-passPhrase",
             "lastName", "firstName", "profession", "nihii", "ssin", "zipCode", "city", "email", "offset", "limit"
         )
-        Assertions.assertThat(parameters).allMatch { it.get("description").asString.isNotEmpty() }
-        // @ApiParam defaults required to false, which would wrongly advertise the auth headers as optional
-        Assertions.assertThat(parameters.filter { it.get("in").asString == "header" })
-            .allMatch { it.get("required").asBoolean }
-        Assertions.assertThat(parameters.filter { it.get("in").asString == "query" })
-            .allMatch { !it.get("required").asBoolean }
+        Assertions.assertThat(parameters).allMatch { it.get("description").asText().isNotEmpty() }
+        // @Parameter also defaults required to false, so the auth headers must inherit it from @RequestHeader
+        Assertions.assertThat(parameters.filter { it.get("in").asText() == "header" })
+            .allMatch { it.get("required").asBoolean() }
+        Assertions.assertThat(parameters.filter { it.get("in").asText() == "query" })
+            .allMatch { !it.get("required").asBoolean() }
     }
 
     @Test

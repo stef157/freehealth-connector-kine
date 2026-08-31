@@ -9,7 +9,7 @@ import be.recipe.services.prescriber.PutVisionResult
 import be.recipe.services.prescriber.UpdateFeedbackFlagResult
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
-import org.apache.commons.lang.StringUtils
+import org.apache.commons.lang3.StringUtils
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.taktik.connector.business.domain.kmehr.v20161201.be.ehealth.logic.recipe.xsd.v20160906.RecipeNotification
@@ -122,8 +122,8 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.zip.DataFormatException
-import javax.xml.bind.JAXBContext
-import javax.xml.bind.JAXBException
+import jakarta.xml.bind.JAXBContext
+import jakarta.xml.bind.JAXBException
 import javax.xml.datatype.XMLGregorianCalendar
 import be.recipe.services.feedback.Feedback as FeedbackText
 
@@ -158,7 +158,7 @@ class RecipeV4ServiceImpl(
 
         val ridList = service.listOpenRids(samlToken, credential, patientId, vendorName, packageVersion)
 
-        val es = Executors.newFixedThreadPool(5)
+        val es = Executors.newVirtualThreadPerTaskExecutor()
         try {
             val getFeedback = es.submit<List<Feedback>> {
                 listFeedbacks(
@@ -632,8 +632,8 @@ class RecipeV4ServiceImpl(
             visionOthers
         ))
 
-        //Launch a max of 9 threads to create the other prescriptions in parallel
-        val es = Executors.newFixedThreadPool(9)
+        //Launch virtual threads to create the other prescriptions in parallel
+        val es = Executors.newVirtualThreadPerTaskExecutor()
         try {
             val futures = es.invokeAll<Pair<Kmehrmessage, String>>(medications.drop(1).map { meds ->
                 Callable<Pair<Kmehrmessage, String>> {
@@ -929,7 +929,7 @@ class RecipeV4ServiceImpl(
                                     cd = CDCOUNTRY().apply {
                                         s = CDCOUNTRYschemes.CD_FED_COUNTRY
                                         value = address.country?.let {
-                                            codeDao.getCodeByLabel(it, "CD-FED-COUNTRY")?.code ?: it.toLowerCase()
+                                            codeDao.getCodeByLabel(it, "CD-FED-COUNTRY")?.code ?: it.lowercase()
                                         } ?: "be"
                                     }
                                 }

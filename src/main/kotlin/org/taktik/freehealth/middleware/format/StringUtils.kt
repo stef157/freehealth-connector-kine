@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of iCureBackend.
  *
@@ -28,7 +28,7 @@ object StringUtils {
         return if (key == null) {
             null
         } else removeDiacriticalMarks(key).replace("[\\s]".toRegex(), "")
-            .replace("\\W".toRegex(), "").toLowerCase()
+            .replace("\\W".toRegex(), "").lowercase()
 
     }
 
@@ -102,6 +102,6 @@ object StringUtils {
     }
 
     fun equals(s1: String?, s2: String?): Boolean {
-        return s1 != null && s2 != null && (org.apache.commons.lang.StringUtils.equals(s1, s2) || org.apache.commons.lang.StringUtils.equals(sanitizeString(s1), sanitizeString(s2)))
+        return s1 != null && s2 != null && (org.apache.commons.lang3.StringUtils.equals(s1, s2) || org.apache.commons.lang3.StringUtils.equals(sanitizeString(s1), sanitizeString(s2)))
     }
 }

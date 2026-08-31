@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,10 +20,12 @@
 
 package org.taktik.freehealth.middleware.dto
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import be.fgov.ehealth.aa.complextype.v1.ProfessionCode
 import be.fgov.ehealth.addressbook.core.v1.EHealthBoxType
 import org.taktik.freehealth.middleware.dto.common.Gender
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class HealthcareParty(
     val name: String? = null,
     val lastName: String? = null,

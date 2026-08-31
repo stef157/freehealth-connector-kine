@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,7 +20,7 @@
 
 package org.taktik.connector.business.ehbox.api.utils
 
-import javax.activation.DataHandler
+import jakarta.activation.DataHandler
 
 class SigningValue {
     var signingDownloadFileName: String? = null

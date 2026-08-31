@@ -18,14 +18,14 @@
 
 package org.taktik.freehealth.middleware.web.controllers
 
-import com.google.gson.JsonParser
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
-import org.springframework.boot.web.server.LocalServerPort
+import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
@@ -85,7 +85,7 @@ class EfactFlatcoreOfflineTest {
     private fun flatcore(body: String): List<String> {
         val response = post(body)
         assertThat(response.statusCode.value()).isEqualTo(200)
-        val flatFile = JsonParser().parse(response.body).asJsonObject.get("flatFile").asString
+        val flatFile = ObjectMapper().readTree(response.body).get("flatFile").asText()
         return flatFile.chunked(350).also { records -> assertThat(records).allMatch { it.length == 350 } }
     }
 

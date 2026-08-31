@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,10 +20,12 @@
 
 package org.taktik.freehealth.middleware.dto.eattest
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.joda.time.DateTime
 import org.taktik.freehealth.middleware.dto.mycarenet.CommonOutput
 import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetConversation
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 open class SendAttestResult(
     var acknowledge: EattestAcknowledgeType? = null,
     var invoicingNumber: String? = null,

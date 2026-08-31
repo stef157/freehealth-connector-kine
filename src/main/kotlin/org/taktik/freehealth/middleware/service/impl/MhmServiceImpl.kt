@@ -55,7 +55,8 @@ import be.fgov.ehealth.technicalconnector.signature.AdvancedElectronicSignatureE
 import be.fgov.ehealth.technicalconnector.signature.SignatureBuilderFactory
 import be.fgov.ehealth.technicalconnector.signature.domain.SignatureVerificationError
 import be.fgov.ehealth.technicalconnector.signature.domain.SignatureVerificationResult
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.context.SecurityContextHolder
@@ -90,7 +91,7 @@ import java.math.BigDecimal
 import java.util.UUID
 import javax.xml.namespace.NamespaceContext
 import javax.xml.parsers.DocumentBuilderFactory
-import javax.xml.ws.soap.SOAPFaultException
+import jakarta.xml.ws.soap.SOAPFaultException
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathFactory
 
@@ -102,9 +103,8 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
         org.taktik.connector.business.mhm.impl.MhmServiceImpl()
 
     private val mhmSubscriptionErrors =
-        Gson().fromJson(
-            this.javaClass.getResourceAsStream("/be/errors/mhmSubscriptionError.json").reader(Charsets.UTF_8),
-            arrayOf<MycarenetError>().javaClass
+        ObjectMapper().readValue<Array<MycarenetError>>(
+            this.javaClass.getResourceAsStream("/be/errors/mhmSubscriptionError.json")!!
         ).associateBy({ it.uid }, { it })
 
     private val xPathFactory = XPathFactory.newInstance()
@@ -1362,7 +1362,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
         xpath.namespaceContext = object : NamespaceContext {
             override fun getNamespaceURI(prefix: String?) = "http://www.ehealth.fgov.be/standards/kmehr/schema/v1"
             override fun getPrefix(namespaceURI: String?) = "ns1"
-            override fun getPrefixes(namespaceURI: String?): Iterator<Any?> =
+            override fun getPrefixes(namespaceURI: String?): Iterator<String> =
                 if (namespaceURI == "http://www.ehealth.fgov.be/standards/kmehr/schema/v1") listOf("ns1").iterator() else listOf<String>().iterator()
         }
         /*if (localName == "transaction") {

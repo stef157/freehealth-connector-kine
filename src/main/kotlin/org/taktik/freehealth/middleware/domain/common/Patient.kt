@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.domain.common
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import org.taktik.freehealth.middleware.domain.common.FinancialInstitutionInformation
 import org.taktik.freehealth.middleware.domain.common.Insurability
@@ -31,6 +32,7 @@ import java.util.*
 
 @Suppress("unused")
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Patient : Person {
     override var firstName: String? = null
     override var lastName: String? = null //Is usually either maidenName or spouseName

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2018 Taktik SA
+ * Copyright (C) 2018 iCure SA
  *
  * This file is part of FreeHealthConnector.
  *
@@ -49,8 +49,8 @@ import be.fgov.ehealth.ehbox.core.v3.SenderType
 import java.security.KeyStore
 import java.util.ArrayList
 
-import org.apache.commons.lang.ArrayUtils
-import org.apache.commons.lang.StringUtils
+import org.apache.commons.lang3.ArrayUtils
+import org.apache.commons.lang3.StringUtils
 import org.slf4j.LoggerFactory
 
 abstract class AbstractConsultationBuilder<T>() {

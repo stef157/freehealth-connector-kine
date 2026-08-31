@@ -85,6 +85,26 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
   with `java.net.http.HttpClient` (to avoid pinning virtual threads) — i.e. the SOAP transport itself — and they
   postdate the test baseline `MIGRATION_TO_SPRING_3_5_5.md` reports. Only a real acceptance call exercises it, sealing
   and timestamping included. The earlier SAAJ 3.0.4 upgrade already broke that path once with `WRONG_DOCUMENT_ERR`.
+  **It was exercised, and it holds** — smokes run 31/08/2026 against acceptance from the container, with the CIN
+  licence and `-Dpackage.name=Kine-Desk`, on certificate `SSIN=88022434719` (token: NIHII `99007334527`,
+  physiotherapist):
+
+  | call | result |
+  |---|---|
+  | `POST /sts/keystore` → `GET /sts/token/physiotherapist?ssin=…` | 200, full SAML assertion (WS-Trust, sealing) |
+  | `GET /ab/hcp/nihii/…` | 200, real identity, `PHYSIOTHERAPIST`, eHealthBox address |
+  | `GET /ehboxV3` | 200, real box summary |
+  | **`POST /mda/{ssin}`** (insurability facet) | **200, insurer assertions** (`urn:be:cin:io:500`) — e2e encryption both ways |
+  | `GET /efact/{nihii}/fr` | 200 `[]`, empty mailbox as expected |
+  | `POST /eagreement/consultList` | `SOA-01002` — expected, and **no `SOA-03004`**: the v2 message is still conformant |
+  | `POST /eagreement/askAgreement` | `INVALID_DETAIL_REQUEST: processing` — MyCareNet decrypted and processed it, then refused invented FHIR content; the operation itself is authorised |
+  | **`POST /eattestv3/send/{ssin}/verbose`** | **200, signed acknowledgement**, XAdES seal of ~9.5 kB, error uid 51 / code 156 on the author NIHII — the known test-certificate limitation, not a transport failure |
+
+  So KMEHR building, eTEE encryption, XAdES sealing, timestamping and the MyCareNet round trip all work under Java 21
+  with the new transport. Two request-shape traps met on the way, unchanged by the migration: MDA needs **`hcpSsin`**
+  (without it MyCareNet answers `INCORRECT_INSS_PHYSIOTHERAPIST_SAML` naming an empty SSIN), and
+  `askAgreement` dereferences `prescription1!!`, so a `prescription1` attachment is mandatory despite the signature
+  saying the body is optional — a bare `NullPointerException`, surfaced only because unhandled exceptions are logged.
 
 ## Tests are live integration tests
 

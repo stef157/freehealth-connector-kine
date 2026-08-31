@@ -56,7 +56,7 @@ class EfactFlatcoreOfflineTest {
                      "readType": "1", "deviceType": "1", "vignetteReason": 0, "justificationDocumentNumber": 1 }
     """.trimIndent()
 
-    private fun batch(itemExtras: String) = """
+    private fun batch(itemExtras: String, invoiceExtras: String = "") = """
         {
           "invoicingYear": 2026, "invoicingMonth": 7,
           "batchRef": "TESTBATCH0001", "uniqueSendNumber": 1, "numericalRef": 1,
@@ -67,7 +67,7 @@ class EfactFlatcoreOfflineTest {
             "professionCode": 50
           },
           "invoices": [{
-            "ioCode": "306", "invoiceNumber": 1, "invoiceRef": "TESTINV0001", "reason": "Other",
+            "ioCode": "306", "invoiceNumber": 1, "invoiceRef": "TESTINV0001", "reason": "Other"$invoiceExtras,
             "patient": { "ssin": "86103130262", "firstName": "Test", "lastName": "Patient" },
             "items": [{
               "codeNomenclature": 567011, "dateCode": 20260729, "reimbursedAmount": 1000,
@@ -132,5 +132,50 @@ class EfactFlatcoreOfflineTest {
         val records = flatcore(batch(""", "insuranceRef": "1234567890", "insuranceRefDate": 20260729"""))
 
         assertThat(records.map { it.take(2) }).containsExactly("10", "20", "50", "51", "80", "90")
+    }
+
+    // -------------------------------------------------------------------------------------------------------
+    // ET 20 Z 42-43-44-45, the payment approval the MDA returns. Source: instructions de facturation
+    // electronique, edition 2021, p. 275 (48 A = 32 A + 10 N + 2 N + 1 N + 3 N), named by annexe 26.2 p. 202
+    // as "N° engagement de paiement (MDA)". Positions 213-260 of the type 20 record.
+    // -------------------------------------------------------------------------------------------------------
+
+    private val paymentApproval = "41D862C7BDCB08F4CB9C30D96ED1C446"
+
+    private fun record20Zone4245(records: List<String>) =
+        records.single { it.startsWith("20") }.substring(212, 260)
+
+    @Test
+    fun aPaymentApprovalReachesRecord20Zone4245() {
+        val records = flatcore(batch("", """, "paymentApproval": "$paymentApproval""""))
+
+        assertThat(records.map { it.take(2) }).containsExactly("10", "20", "50", "80", "90")
+        assertThat(record20Zone4245(records)).isEqualTo("41D862C7BDCB08F4CB9C30D96ED1C4460000000000002000")
+    }
+
+    /** The zone is on the invoice, so both lines of one invoice share the engagement and the record says it once. */
+    @Test
+    fun withoutAPaymentApprovalTheZoneHolds48Zeroes() {
+        assertThat(record20Zone4245(flatcore(batch("")))).isEqualTo("0".repeat(48))
+    }
+
+    /**
+     * 204217 F, "Donnees de reference reseau different de zero et enregistrement de type 51 present": an
+     * insuranceRef on any item of the invoice emits an ET 51, which the OA refuses beside a filled Z 42-45.
+     */
+    @Test
+    fun aPaymentApprovalBesideAnEt51IsRefused() {
+        val response = post(batch(""", "insuranceRef": "1234567890123"""",
+            """, "paymentApproval": "$paymentApproval""""))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("204217")
+    }
+
+    /** A wrong length is refused, not completed: catalogue 204225 F. */
+    @Test
+    fun aMalformedPaymentApprovalIsRefused() {
+        val response = post(batch("", """, "paymentApproval": "41D862C7""""))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("ET 20 Z 42-45")
     }
 }

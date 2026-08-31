@@ -21,6 +21,12 @@ package org.taktik.freehealth.middleware.format.efact.segments
 import java.util.LinkedHashMap
 
 object Record20Description : RecordOrSegmentDescription() {
+    /** ET 20 Z 42-45 when the network was not consulted: forty-eight zeroes (instructions, p. 275). */
+    const val EMPTY_NETWORK_REFERENCE = "000000000000000000000000000000000000000000000000"
+
+    /** Length of the paymentApproval the MDA returns, i.e. of the 32 A part of ET 20 Z 42-45. */
+    const val PAYMENT_APPROVAL_LENGTH = 32
+
     private val ZONE_DESCRIPTIONS_BY_ZONE = LinkedHashMap<String, ZoneDescription>(50)
 
     override val zoneDescriptionsByZone: Map<String, ZoneDescription>
@@ -64,7 +70,15 @@ object Record20Description : RecordOrSegmentDescription() {
         pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "38,39", "ReferenceMutualiteNumeroDeCompteFinancierAPartie1et2", null, "A", pos, 22)
         pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "40", "Reserve", null, "N", pos, 2)
         pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "41", "AnneeEtMoisDeFacturationPrecedente", "previousInvoicingYearMonth", "N", pos, 6)
-        pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "42,43a,43b,44,45", "DonneesDeReferenceReseauOuCarteSisPartie1_2_3_4et5", null, "N", pos, 48)  //Forced to N so that it is padded with 0s
+        // ET 20 Z 42-43-44-45, positions 213-260. The instructions de facturation electronique (edition 2021,
+        // p. 275) declare it 48 A = 32 A + 10 N + 2 N + 1 N + 3 N, and annexe 26.2 (p. 202) names the content:
+        // "Donnees de reference reseau | N° engagement de paiement (MDA)". The 32 alphanumerical positions hold
+        // the paymentApproval an insurer returns on the MemberData insurability period, a hexadecimal digest, so
+        // the zone cannot be numerical: Zone routes N through Long.valueOf, which refuses anything but digits and
+        // overflows past 19 of them. It was forced to N only to obtain zero filling, which p. 275 does require
+        // ("le contenu de cette zone est egal a zero" when nothing was engaged) - hence the explicit all-zero
+        // default value, which keeps every invoice byte for byte identical instead of blank filling 48 positions.
+        pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "42,43a,43b,44,45", "DonneesDeReferenceReseauOuCarteSisPartie1_2_3_4et5", null, "A", pos, 48, EMPTY_NETWORK_REFERENCE)
         pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "46", "Reserve", null, "N", pos, 1)
         pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "47", "Date de facturation", null, "N", pos, 8)
         pos = register(ZONE_DESCRIPTIONS_BY_ZONE, "48", "Reserve", null, "N", pos, 1)

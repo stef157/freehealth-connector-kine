@@ -414,6 +414,33 @@ message):
 
 `isTest = true` stamps field 304 with `9991999` instead of `1999`, which is how the OA tells a test batch apart.
 
+**`ET 52 Z 15` carries the batch sender, not the provider of the line** — measured 31/08/2026, reproduced twice
+before (lots D1, NC2) and now reduced to a minimal case. Annexe 26.4 (p. 204) prescribes
+`15  Identification dispensateur  = ET 50 Z 15`, and ET 50 Z 15 (p. 468) is *"le numéro d'identification du
+dispensateur de soins qui a réellement effectué la prestation"*.
+`BelgianInsuranceInvoicingFormatWriter.kt:628` instead writes `invoiceSender.nihii`, while the two neighbouring
+records read the item: ET 50 (line 448) and ET 51 (line 546) both write `icd.doctorIdentificationNumber`.
+`writeEid` already receives `icd`, so nothing is missing from its signature.
+
+Two batches identical but for `items[0].doctorIdentificationNumber`, through `/efact/flat`:
+
+| batch | ET 50 Z 15 | ET 52 Z 15 expected | ET 52 Z 15 produced |
+|---|---|---|---|
+| provider = sender | `054123456789` | `054123456789` | `054123456789` |
+| provider ≠ sender | `011478761004` | `011478761004` | **`054123456789`** |
+
+So the defect is **invisible for a solo practitioner** — the two numbers coincide and every ET 52 is right by
+accident — and **wrong the moment a substitute bills through the practice's batch**: ET 50 names the substitute,
+ET 52 names the practice, the line is attributed to the wrong provider, and nothing is malformed, so no validation
+catches it. The line is verbatim in `upstream/master` (line 627 there), not a local regression. A ready-to-send
+reproduction — the two payloads, the two flat files, their sha256, a one-command `reproduce.sh` and an English
+note citing the annexe — sits in `out/et52-z15-repro/` (untracked, `.gitignore:11:out/`; it carries NISS).
+
+`/efact/flat` needs two things `/efact/flatcore` does not: a `fileRef` (`EfactServiceImpl.kt:72`, else a bare 500
+`FileRef cannot be null`) and an explicit `Accept: text/plain` — without it the endpoint answers
+500 `No acceptable representation`, since `defaultContentType(APPLICATION_JSON)` and `produces = TEXT_PLAIN` do
+not meet. `sender.phoneNumber` is also capped at 10 positions by ET 300 Z 307.
+
 ### Addressbook and eHealthBox (read paths verified)
 
 Both work out of the box with a physiotherapist token, no special configuration:

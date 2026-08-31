@@ -21,6 +21,7 @@
 package org.taktik.freehealth.middleware.web.controllers
 
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -79,6 +80,11 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param guardPostName optional name of the guard post
      * @param attemptNbr optional attempt number for resubmission of a previously failed attestation
      * @param decisionReference optional reference to a prior authorization decision (e.g. from Chapter IV / eAgreement)
+     * @param inputReference optional InputReference to replay. A duplicate, as the MPTI eAttest V3 Duplicata
+     *   manual defines it (4.1.2), is the same message sent again with the same InputReference, the same Kmehr-ID
+     *   and an increased attemptNbr; without this parameter the reference is regenerated from the clock and the
+     *   resend is treated as one more attestation. eHealth checks the reference against the request id, so a
+     *   duplicate replays this parameter and `date` together. Absent, the reference is generated as before.
      * @param attest the attestation payload containing the medical acts to attest
      * @return the full attestation response including acknowledgement, invoicing number, and raw attestation data
      */
@@ -113,6 +119,8 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam(required = false) guardPostName: String?,
         @RequestParam(required = false) attemptNbr: Int?,
         @RequestParam(required = false) decisionReference: String?,
+        @Parameter(description = "InputReference to replay, so that a resend with an increased attemptNbr is recognised as a duplicate (MPTI eAttest V3 Duplicata 4.1.2). Generated from the clock when absent.")
+        @RequestParam(required = false) inputReference: String?,
         @RequestBody attest: Eattest
     ) = eattestService.sendAttestV3(
         keystoreId,
@@ -140,6 +148,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         date,
         attemptNbr,
         decisionReference,
+        inputReference,
         attest
     )
 
@@ -176,6 +185,11 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param guardPostName optional name of the guard post
      * @param attemptNbr optional attempt number for resubmission of a previously failed attestation
      * @param decisionReference optional reference to a prior authorization decision (e.g. from Chapter IV / eAgreement)
+     * @param inputReference optional InputReference to replay. A duplicate, as the MPTI eAttest V3 Duplicata
+     *   manual defines it (4.1.2), is the same message sent again with the same InputReference, the same Kmehr-ID
+     *   and an increased attemptNbr; without this parameter the reference is regenerated from the clock and the
+     *   resend is treated as one more attestation. eHealth checks the reference against the request id, so a
+     *   duplicate replays this parameter and `date` together. Absent, the reference is generated as before.
      * @param attest the attestation payload containing the medical acts to attest
      * @return a simplified [SendAttestResult] with acknowledgement, invoicing number, and attestation data, or null if the service returns no result
      */
@@ -210,6 +224,8 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam(required = false) guardPostName: String?,
         @RequestParam(required = false) attemptNbr: Int?,
         @RequestParam(required = false) decisionReference: String?,
+        @Parameter(description = "InputReference to replay, so that a resend with an increased attemptNbr is recognised as a duplicate (MPTI eAttest V3 Duplicata 4.1.2). Generated from the clock when absent.")
+        @RequestParam(required = false) inputReference: String?,
         @RequestBody attest: Eattest
     ): SendAttestResult? = eattestService.sendAttestV3(
         keystoreId,
@@ -237,6 +253,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         date,
         attemptNbr,
         decisionReference,
+        inputReference,
         attest
     )?.let { SendAttestResult(it.acknowledge, it.invoicingNumber, it.attest) }
 
@@ -266,6 +283,11 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param traineeSupervisorNihii optional NIHII of the trainee's supervisor
      * @param traineeSupervisorFirstName optional first name of the trainee's supervisor
      * @param traineeSupervisorLastName optional last name of the trainee's supervisor
+     * @param inputReference optional InputReference to replay. A duplicate, as the MPTI eAttest V3 Duplicata
+     *   manual defines it (4.1.2), is the same message sent again with the same InputReference, the same Kmehr-ID
+     *   and an increased attemptNbr; without this parameter the reference is regenerated from the clock and the
+     *   resend is treated as one more attestation. eHealth checks the reference against the request id, so a
+     *   duplicate replays this parameter and `date` together. Absent, the reference is generated as before.
      * @return a simplified [SendAttestResult] with acknowledgement, invoicing number, and attestation data, or null if the service returns no result
      */
     @Operation(
@@ -293,7 +315,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam(required = false) traineeSupervisorSsin: String?,
         @RequestParam(required = false) traineeSupervisorNihii: String?,
         @RequestParam(required = false) traineeSupervisorFirstName: String?,
-        @RequestParam(required = false) traineeSupervisorLastName: String?
+        @RequestParam(required = false) traineeSupervisorLastName: String?,
+        @Parameter(description = "InputReference to replay, so that a resend with an increased attemptNbr is recognised as a duplicate (MPTI eAttest V3 Duplicata 4.1.2). Generated from the clock when absent.")
+        @RequestParam(required = false) inputReference: String?
                   ): SendAttestResult? =
         eattestService.cancelAttest(
             keystoreId,
@@ -312,10 +336,11 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
             patientFirstName,
             patientLastName,
             patientGender,
-            null,
+            date,
             eAttestRef,
             reason,
-            attemptNbr
+            attemptNbr,
+            inputReference
        )?.let { SendAttestResult(it.acknowledge, it.invoicingNumber, it.attest) }
 
     /**
@@ -344,6 +369,11 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param traineeSupervisorNihii optional NIHII of the trainee's supervisor
      * @param traineeSupervisorFirstName optional first name of the trainee's supervisor
      * @param traineeSupervisorLastName optional last name of the trainee's supervisor
+     * @param inputReference optional InputReference to replay. A duplicate, as the MPTI eAttest V3 Duplicata
+     *   manual defines it (4.1.2), is the same message sent again with the same InputReference, the same Kmehr-ID
+     *   and an increased attemptNbr; without this parameter the reference is regenerated from the clock and the
+     *   resend is treated as one more attestation. eHealth checks the reference against the request id, so a
+     *   duplicate replays this parameter and `date` together. Absent, the reference is generated as before.
      * @return the full cancellation response including acknowledgement, invoicing number, and raw attestation data
      */
     @Operation(
@@ -371,7 +401,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam(required = false) traineeSupervisorSsin: String?,
         @RequestParam(required = false) traineeSupervisorNihii: String?,
         @RequestParam(required = false) traineeSupervisorFirstName: String?,
-        @RequestParam(required = false) traineeSupervisorLastName: String?
+        @RequestParam(required = false) traineeSupervisorLastName: String?,
+        @Parameter(description = "InputReference to replay, so that a resend with an increased attemptNbr is recognised as a duplicate (MPTI eAttest V3 Duplicata 4.1.2). Generated from the clock when absent.")
+        @RequestParam(required = false) inputReference: String?
                     ) =
         eattestService.cancelAttest(
             keystoreId,
@@ -390,9 +422,10 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
             patientFirstName,
             patientLastName,
             patientGender,
-            null,
+            date,
             eAttestRef,
             reason,
-            attemptNbr
+            attemptNbr,
+            inputReference
                                    )
 }

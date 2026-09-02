@@ -1275,7 +1275,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                         familyname = hcpLastName
                     })
                 }
-                date = now; time = now
+                date = refDateTime; time = refDateTime
             }
 
             kmehrmessage = Kmehrmessage().apply {

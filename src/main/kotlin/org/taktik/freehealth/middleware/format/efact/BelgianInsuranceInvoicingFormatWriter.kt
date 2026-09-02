@@ -534,7 +534,11 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
             ) + nf9.format(Math.abs(icd.patientFee)))
         ws.write("28", icd.invoiceRef)
         ws.write("29", icd.anatomy ?: "00")
-        ws.write("30",(if (icd.doctorSupplement >= 0) "+" else "-") + nf9.format(Math.abs(icd.doctorSupplement)))
+        ws.write("30",(if (icd.doctorSupplement > 0) "+"
+            else if (icd.doctorSupplement < 0) "-"
+            else if (creditNote) "-"   // zero case when credit note applies
+            else "+"                   // zero case otherwise
+            ) + nf9.format(Math.abs(icd.doctorSupplement)))
         ws.write("32", icd.override3rdPayerCode?. let { if (it == "N") it else "0" } ?: "0")
         ws.write("33", icd.personalInterventionCoveredByThirdPartyCode?. let { if (it >= 0) it else 0 } ?: 0)//MAF Zone 33 todo //Mettre 1 si a charge du medecin
         ws.write("34", (icd.sideCode?: InvoicingSideCode.None).code)

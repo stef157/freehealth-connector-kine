@@ -1411,7 +1411,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val kgssSe
         }
     }
 
-    private fun extractError(kmehrRequest: ByteArray, ec: String, errors: Map<String, MycarenetError>, errorUrl: String?): Set<MycarenetError> {
+    internal fun extractError(kmehrRequest: ByteArray, ec: String, errors: Map<String, MycarenetError>, errorUrl: String?): Set<MycarenetError> {
         val url = errorUrl?.let { if (it.isNotEmpty()) it else null }
         var textContent: String? = null
         val result = mutableSetOf<MycarenetError>()

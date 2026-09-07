@@ -313,7 +313,7 @@ class TarificationServiceImpl(private val stsService: STSService) : Tarification
 
     }
 
-    private fun extractError(sendTransactionRequest: ByteArray, ec: String, errorUrl: String?): Set<MycarenetError> {
+    internal fun extractError(sendTransactionRequest: ByteArray, ec: String, errorUrl: String?): Set<MycarenetError> {
         return errorUrl?.let { url ->
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true

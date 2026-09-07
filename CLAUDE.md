@@ -98,7 +98,7 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
   | `GET /efact/{nihii}/fr` | 200 `[]`, empty mailbox as expected |
   | `POST /eagreement/consultList` | `SOA-01002` — expected, and **no `SOA-03004`**: the v2 message is still conformant |
   | `POST /eagreement/askAgreement` | `INVALID_DETAIL_REQUEST: processing` — MyCareNet decrypted and processed it, then refused invented FHIR content; the operation itself is authorised |
-  | **`POST /eattestv3/send/{ssin}/verbose`** | **200, signed acknowledgement**, XAdES seal of ~9.5 kB, error uid 51 / code 156 on the author NIHII — the known test-certificate limitation, not a transport failure |
+  | **`POST /eattestv3/send/{ssin}/verbose`** | **200, signed acknowledgement**, XAdES seal of ~9.5 kB, error uid 51 / code 156 on the author NIHII — the known test-certificate limitation, not a transport failure. The `uid` is rendered by FHC only since `dd28eb602`; before it, only the bare code came back |
 
   So KMEHR building, eTEE encryption, XAdES sealing, timestamping and the MyCareNet round trip all work under Java 21
   with the new transport. Two request-shape traps met on the way, unchanged by the migration: MDA needs **`hcpSsin`**
@@ -285,6 +285,21 @@ Hard-won details:
   `502 — SOA-02001: Service is not available. Please contact service desk.` (platform outage, nothing to fix locally).
   Raising log levels does not help: the SOAP body is not logged even at DEBUG.
 
+**Reading an eAttest error** — and note this is the opposite of the MDA advice below. Until `dd28eb602` the error
+catalogue was never consulted: `extractError` compiled the location MyCareNet sends against a namespace-qualified
+request with unprefixed name tests, so nothing resolved and every error came back as `code` plus
+*"Erreur générique, xpath invalide"*. Now the location is rewritten to `*[local-name()='…']` before compiling, and a
+`not(…)` step — the CIN notation for a *missing* element — resolves its parent so the entry's `regex` can match. So on
+eAttest, `msgFr` **is** the CIN message, and `uid`, `locFr`, `path` and `value` are filled: `path` is the readable
+`/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`, `value` the offending node **of your
+own request** (an SSIN, a NIHII, a date — don't show it to the practitioner unintentionally), and it is empty on a
+missing-element error, where only the parent resolved. An error absent from the 158 catalogue entries keeps the
+insurer's own `description` (`f1e1df793`).
+`EattestV3ErrorRenderingOfflineTest` measures all of it offline. What is still not measured is the real shape of the
+`url`: no captured acknowledgement error exists in the repository, and the shape above is inferred from the CIN xpath
+column transcribed into `MemberDataErrors.json`. Both fallback branches now log it at WARN
+(`eattestv3: error … unresolved location` / `uncompilable location`) — read those logs to settle it.
+
 ### Calling MDA (Member Data)
 
 `GET /mda/{ssin}` requests four default facets (`MemberDataServiceImpl.kt:815`), including
@@ -305,7 +320,8 @@ Two traps when reading an MDA failure:
 - **Facet ids must be the full URN.** `MemberDataServiceImpl.kt:814` is `facets ?: listOf(defaults)` — a client-supplied
   facet id goes into the `AttributeQuery` verbatim, with no prefixing. Sending `"insurability"` instead of
   `urn:be:cin:nippin:insurability` gets the whole query rejected.
-- **Read `detailCode`, never `msgFr`.** The error text is rendered locally from `be/errors/MemberDataErrors.json`
+- **Read `detailCode`, never `msgFr`** — on MDA, unlike eAttest above. The error text is rendered locally
+  from `be/errors/MemberDataErrors.json`
   against the `detailCode` MyCareNet returned, and that catalogue is a translation of the CIN table, not the CIN's own
   words — upstream, uid 23 (`UNKNOWN_FACET`, *"A requested facet does not exist"*) carries a French message
   copy-pasted from uid 25 (`UNAUTHORIZED_FACET`), so an unknown facet reads as an access-rights refusal and the only

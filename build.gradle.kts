@@ -204,12 +204,18 @@ dependencies {
  * Builds the local deployment image from the boot jar, the way ./gradlew dockerize did before the Spring
  * Boot 3 migration removed the DockerJavaPlugin. Pass -PgitVersion=x.y.z to tag something other than the
  * default version, and -PdockerPush to push it.
+ *
+ * The image is named `kinedesk/fhc`, not upstream's `docker.taktik.be/icure/freehealth-connector`: this is
+ * a fork, its images are ours, and the deployed tag must not read as the vendor's. The tag is therefore
+ * `kinedesk/fhc:0.3.<n>-<sha10>`. The release script that carries an image to production is
+ * `deploy/release-image.sh` in the kine-data repository; it cross-builds for amd64 with buildx, since the
+ * host is amd64 and this task builds natively for whatever machine runs it.
  */
 val dockerize by tasks.registering(Exec::class) {
     group = "docker"
     description = "Build the docker image from the boot jar."
     dependsOn(tasks.named("bootJar"))
-    val image = "docker.taktik.be/icure/freehealth-connector:$version"
+    val image = "kinedesk/fhc:$version"
     doFirst {
         val jar = tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar")
             .get().archiveFile.get().asFile
@@ -227,7 +233,7 @@ tasks.register<Exec>("dockerPush") {
     group = "docker"
     description = "Push the image built by dockerize."
     dependsOn(dockerize)
-    commandLine("docker", "push", "docker.taktik.be/icure/freehealth-connector:$version")
+    commandLine("docker", "push", "kinedesk/fhc:$version")
 }
 
 tasks.register<JavaExec>("ktlint") {

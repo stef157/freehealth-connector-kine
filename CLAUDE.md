@@ -33,6 +33,10 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew dockerize -PgitVersion=3.5.0   # …tagged 3.5.0 instead of the default 0.0.1-SNAPSHOT
 ```
 
+**Since 07/09/2026 the image is named `kinedesk/fhc`, never upstream's name again** — the tag is
+`kinedesk/fhc:0.3.<n>-<sha10>`, and it applies from the next release; the image in production still carries
+the old name, which is why the compose pin does too until it is bumped.
+
 `dockerize` is defined in `build.gradle.kts` here, not by a plugin: it runs `bootJar` and then `docker build` on the
 repo's own `Dockerfile` (`eclipse-temurin:21-jre`, **shell** entrypoint so `JAVA_OPTS` still reaches the JVM — see the
 licence section, that is where the CIN credentials travel). `dockerPush` pushes the same tag. Upstream instead builds
@@ -67,12 +71,23 @@ The local half is measured (02/09/2026, this repo, arm64 Mac):
 | transport to the local host | **none**. `docker image inspect … --format '{{.RepoDigests}}'` is **empty**, which is only true of an image that was neither pushed nor pulled: `docker.taktik.be/icure/…` is a tag string here, not a registry it transited. The Docker daemon that built it is the one that runs it |
 | run | not `docker run`, but Compose — `docker compose -f deploy/fhc/docker-compose.yml up -d` from the **kine-data** repo (the container's own labels name that file). The container in service was created **07/09/2026 13:17** from the 02/09 image, `restart: unless-stopped`, published on `127.0.0.1:8090` only, with `fhc-ehealth` and `fhc-tmp` as external named volumes |
 
-`dockerPush` exists and would push that tag to `docker.taktik.be`, and it has never been used for this image.
-**The production host is a separate question this repo cannot answer**: a read-only `docker ps` there on 06/09/2026
-showed the *same* tag running, yet no document records a `docker save`/`load`, a `push`/`pull`, or a build on that
-machine — and the fork is reported absent from it. So how the image got there is **not established**; the two
-candidates are an offline `docker save | ssh … docker load` and an authenticated pull. `RepoDigests` on that host
-settles it in one command. Do not write down either hypothesis as the chain.
+`dockerPush` exists and has never been used: **no image of this fork has ever transited a registry.**
+
+**The production chain is established — 07/09/2026, by Stéphane, and it is a cross-build.** The workstation
+is arm64 and the host is amd64, so the image `dockerize` builds natively here **would not start there**, and
+nothing in the tag would say so. The chain that runs is: `./gradlew dockerize -x test` (the workstation's own
+arm64 image), then `docker buildx build --platform linux/amd64 … --output type=docker,dest=fhc-<tag>-amd64.tar`
+— an explicit tar, **not** `--load`, which would overwrite the arm64 image under the same tag — then `scp` into
+`~sys_kinedesk/` on the host, `docker load`, `docker compose up -d`, and two controls: the md5 of the jar the
+JVM actually opened (`/proc/1/fd/*`) against the md5 of the jar built here, and `/actuator/health`. The tar is
+removed afterwards. Production runs `0.3.897-c75b7bc271`, jar md5 `0d748ebfb3e411798992341461eef556`.
+
+The whole thing is scripted in the kine-data repository, `deploy/release-image.sh`, in two halves —
+`poste` (build, cross-build, save, copy) and `hote` (load, up, controls, cleanup) — because `docker` is
+absent from the SSH jail and root plays the second half. Read that script rather than retyping the commands:
+it carries the four traps that were paid for once (the session `DOCKER_CONFIG` must keep `currentContext`;
+`--output` and not `--load`; the default `docker` driver refuses that export, hence a `docker-container`
+builder; gzip buys 0.6 % and is not worth a step).
 
 API docs are served by **springdoc** (OpenAPI 3): UI at `/swagger-ui.html`, descriptor at `/v3/api-docs`. SpringFox and
 its `/api/index.html` / `/v2/api-docs` are gone.

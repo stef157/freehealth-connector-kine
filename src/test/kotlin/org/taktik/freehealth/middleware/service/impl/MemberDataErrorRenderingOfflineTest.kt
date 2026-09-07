@@ -684,4 +684,55 @@ class MemberDataErrorRenderingOfflineTest {
         assertThat(once()).isNotSameAs(once())
         assertThat(once().uid).isEqualTo("62")
     }
+
+    // ------------------------------------------------------- what a real MDA error sent, 07/09/2026
+
+    /**
+     * **Two locations MyCareNet really sent, captured from acceptance on 07/09/2026** — the first real MDA
+     * errors this work has measured, as against the six published examples the tests above replay.
+     *
+     * The second one settles a label this file's documentation carried for one day. An attribute step was
+     * written down as *inferred, never observed*, on the ground that the eleven `@name` entries of
+     * `MemberDataErrors.json` are catalogue paths rather than wire locations. The CIN does send one: a
+     * coverage window whose end precedes its start comes back as `@NotOnOrAfter`, and `5c9c6d3aa` is what
+     * makes it resolve — before it, an `Attr` had no `parentNode`, the climb never ran, and `base` came out
+     * as the bare `/NotOnOrAfter`, matching nothing.
+     *
+     * The facet one also shows a form no published example carries: a predicate on `@id` holding the facet
+     * URN. It resolves to the `Facet` element, which is the path uid 25 is indexed on.
+     */
+    @Test
+    fun theTwoLocationsAcceptanceReallySentBothRender() {
+        val requester = "urn:oasis:names:tc:SAML:2.0:status:Requester"
+        val attributeQueryError = "urn:be:cin:nippin:SAML:status:AttributeQueryError"
+
+        // GET /mda on a physiotherapist token: the default facets include one the profession may not read.
+        val facet = memberData.extractError(
+            attributeQuery,
+            requester,
+            attributeQueryError,
+            """*:AttributeQuery/*:Extensions/*:Facet[@id="urn:be:cin:nippin:referencePharmacy"]""",
+            "UNAUTHORIZED_FACET"
+        )
+        assertThat(facet.map { it.uid }).containsExactly("25")
+        assertThat(facet.single().path).isEqualTo("/AttributeQuery/Extensions/Facet")
+
+        // POST /mda with date/endDate given as yyyyMMdd: a 30 ms window in 1970, so the end precedes the start.
+        val period = memberData.extractError(
+            attributeQuery,
+            requester,
+            attributeQueryError,
+            "*:AttributeQuery/*:Subject/*:SubjectConfirmation/*:SubjectConfirmationData/@NotOnOrAfter",
+            "INVALID_PERIOD"
+        )
+        assertThat(period.map { it.uid })
+            .describedAs("an attribute step, which the CIN does send after all")
+            .containsExactly("55")
+        assertThat(period.single().path)
+            .describedAs("the whole ancestry plus the @ marker, which is how the catalogue indexes it")
+            .isEqualTo("/AttributeQuery/Subject/SubjectConfirmation/SubjectConfirmationData/@NotOnOrAfter")
+        assertThat(period.single().value)
+            .describedAs("the offending node of our own request: the upper bound getAttrQuery wrote")
+            .matches("\\d{4}-\\d{2}-\\d{2}T.*")
+    }
 }

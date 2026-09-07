@@ -354,8 +354,8 @@ MDA's uid 5 location is observed **verbatim** in the packaging's synchronous sce
 Still unobserved, and labelled as such: the `not(…)` step that `resolvableSteps` handles appears in no
 published document, in neither packaging, and **not in the two observed eAttest captures** — it is
 inferred from the catalogues' own `regex` column (`not.+Issuer`), which can only match a location
-containing `not(`. So are attribute-step locations: the 11
-`@name` entries of `MemberDataErrors.json` are catalogue *paths*, and no example shows the CIN sending one. Both fallback branches log the raw
+containing `not(`. Attribute-step locations, labelled the same way for one day, are
+**observed** since 07/09/2026 — see the MDA section. Both fallback branches log the raw
 location at WARN (`eattestv3: error … unresolved location` / `uncompilable location`) — read those to settle
 what really arrives.
 
@@ -488,6 +488,24 @@ The strictness is deliberately not aligned: it is the tighter of the two forms.
 facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`
 (`buildOriginType`, line 533), never into the `AttributeQuery`, which identifies the practitioner solely through
 `issuer` = `urn:be:cin:nippin:nihii11` + the NIHII padded to 11 digits.
+
+**Two locations MyCareNet really sent, measured 07/09/2026 — the first real MDA errors this work has
+seen**, next to the six published examples. Both render, both through the fixes of this batch, and neither
+logged a fallback WARN:
+
+| what was called | location on the wire | rendered |
+|---|---|---|
+| `GET /mda/{ssin}` with a physiotherapist token (default facets include `referencePharmacy`) | `*:AttributeQuery/*:Extensions/*:Facet[@id="urn:be:cin:nippin:referencePharmacy"]` | uid 25 `UNAUTHORIZED_FACET`, path `/AttributeQuery/Extensions/Facet` |
+| `POST /mda/{ssin}` with `date=20210101&endDate=20210102` (the yyyyMMdd trap) | `*:AttributeQuery/*:Subject/*:SubjectConfirmation/*:SubjectConfirmationData/@NotOnOrAfter` | **uid 55 `INVALID_PERIOD`**, full path with the `@`, `value=1970-01-01T06:36:50.102+01:00` |
+
+The second one **withdraws the "unobserved" label** this file carried for a day: the CIN does send an
+attribute step, and `5c9c6d3aa` is exactly what makes it resolve — before it, an `Attr` had no `parentNode`,
+the climb never ran, and `base` came out as the bare `/NotOnOrAfter`, matching none of the eleven entries.
+The facet one adds a **fifth** observed form, a predicate on `@id` holding the facet URN, which no published
+example carries. `theTwoLocationsAcceptanceReallySentBothRender` pins both.
+
+The same run measured the `Success` path unchanged: the six CIN test NISS with the insurability facet answer
+`Success` with the same non-empty fields as the 26/08 baseline, key for key. Only `not(…)` remains inferred.
 
 **The coverage window is `date` / `endDate`, in epoch milliseconds.** Unlike `requestType`, those two query parameters
 are honoured whether the facets come from the body or from the defaults: `getAttrQuery` always writes them to

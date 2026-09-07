@@ -134,7 +134,15 @@ class ObservedErrorLocationsTest {
      * ships no `javax.xml.xpath.XPathFactory` service file — and the JDK caps an expression at
      * `jdk.xml.xpathExprOpLimit` operators, 100 by default. This location has 101, so it throws
      * `JAXP0801002` before any namespace question arises. It threw before the resolution work and it throws
-     * after: the blocker on eAttest, Chapter4 and Dmg is the operator limit, not the namespaces.
+     * after: on **this** location the blocker is the operator limit, not the namespaces.
+     *
+     * The scope of that is exactly one domain, and must not be widened. This is the Chapter IV commons
+     * example, and its 101 operators come from its own predicates; nothing says a Dmg or an eAttest location
+     * is as long. For eAttest v3 the opposite is **measured**: the acceptance smoke of 31/08/2026 returned
+     * `uid 51` alone for code 156, `eAttestErrors.json` carries four entries for that code and not one
+     * null-path entry out of 158, and `EattestV3ServiceImpl` has no code-only bypass — so only
+     * `it.path == base` can have matched, which means the real eAttest url compiled and resolved. Its shape
+     * is not published; the WARN branches are what will settle it.
      *
      * Saxon, which only `MemberDataServiceImpl` instantiates explicitly, compiles it and resolves it to the
      * right node: the author's `id`, which is exactly what CIN error 141 designates.
@@ -162,12 +170,13 @@ class ObservedErrorLocationsTest {
      * What a caller gets today for that error, and why it looks right by accident.
      *
      * The compile throws, so `base` stays null, so Chapter4's first filter falls through its
-     * `base == null` bypass and returns every entry carrying code 141. There is exactly **one**, uid 9, so
+     * `base == null` bypass — a bypass only Chapter4 and Dmg have — and returns every entry carrying
+     * code 141. There is exactly **one**, uid 9, so
      * the answer happens to be correct — a dragnet of one. Change the catalogue to hold two entries for a
      * code and the same path returns both.
      */
     @Test
-    fun theKmehrDomainsAnswerThroughTheCodeOnlyBypass() {
+    fun chapter4AnswersThroughItsOwnCodeOnlyBypass() {
         val chapter4 = Chapter4ServiceImpl(
             org.mockito.Mockito.mock(org.taktik.freehealth.middleware.service.STSService::class.java),
             org.mockito.Mockito.mock(KgssServiceImpl::class.java),
@@ -186,5 +195,45 @@ class ObservedErrorLocationsTest {
         assertThat(errors.single().value)
             .describedAs("nothing resolved, so no offending node is reported")
             .isNull()
+    }
+
+    /**
+     * **eAttest v3 is not in that situation, and this measures why the smoke proves it.**
+     *
+     * The acceptance smoke of 31/08/2026 came back with `uid 51` for code 156 — a single entry, carrying the
+     * readable `path`. Three facts measured here make that possible only through `it.path == base`, i.e. only
+     * if the location MyCareNet sent compiled and resolved against the marshalled request:
+     *
+     * 1. `eAttestErrors.json` holds **no** null-path entry, so the `it.path == null` arm added by this batch
+     *    can never match on eAttest;
+     * 2. code 156 carries **four** entries, so a code-only answer would have returned four, not one;
+     * 3. `EattestV3ServiceImpl` has no `base == null` bypass at all — only Chapter4 and Dmg do.
+     *
+     * So the operator-limit finding above is Chapter IV's, and the real eAttest location — whose shape is
+     * published nowhere — is under the cap. This test exists so the finding cannot be re-widened by reading.
+     */
+    @Test
+    fun theEattestSmokeCouldOnlyHaveComeFromAResolvedPath() {
+        val entries = EattestV3ServiceImpl::class.java.getResourceAsStream("/be/errors/eAttestErrors.json")!!
+            .use { com.fasterxml.jackson.databind.ObjectMapper().readTree(it) }
+            .let { it["values"] ?: it }
+
+        assertThat(entries.count { it["path"] == null || it["path"].isNull })
+            .describedAs("a null path would let the widened filter answer without resolving")
+            .isZero()
+        assertThat(entries.count { it["code"]?.asText() == "156" })
+            .describedAs("a code-only answer for 156 would have returned this many entries, not one")
+            .isEqualTo(4)
+        assertThat(entries.filter { it["code"]?.asText() == "156" }.map { it["uid"].asText() })
+            .contains("51")
+
+        val source = java.io.File(
+            "src/main/kotlin/org/taktik/freehealth/middleware/service/impl/EattestV3ServiceImpl.kt"
+                                 )
+        if (source.exists()) {
+            assertThat(source.readText())
+                .describedAs("only Chapter4 and Dmg carry the code-only bypass")
+                .doesNotContain("filter { it.code == ec }")
+        }
     }
 }

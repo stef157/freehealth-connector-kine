@@ -292,9 +292,9 @@ unintentionally. An error absent from the 158 entries keeps the insurer's own `d
 `EattestV3ErrorRenderingOfflineTest` measures the rendering offline, and `f770a0e42` / `08a5771b6` stopped it
 handing back the shared catalogue entry itself.
 
-**But on the one `url` MyCareNet is actually observed to send, none of that resolution runs — and it never
-did.** `connector-packaging-*-5.1.0-java/config/kmehrcommons/examples/kmehrResponseWithError.xml` publishes
-the only kmehr acknowledgement location there is (error 141), and two measured facts follow
+**On the one kmehr `url` MyCareNet is observed to send, none of that resolution runs — and it never did.**
+`connector-packaging-*-5.1.0-java/config/kmehrcommons/examples/kmehrResponseWithError.xml` publishes the only
+kmehr acknowledgement location there is — a **Chapter IV** one, error 141 — and two measured facts follow
 (`ObservedErrorLocationsTest`):
 
 - MyCareNet writes it **already namespace-agnostic** — `*[local-name()='x' and namespace-uri()='y']`, with
@@ -306,17 +306,38 @@ the only kmehr acknowledgement location there is (error 141), and two measured f
   resolves it to the author's `id`, exactly what error 141 designates; only `MemberDataServiceImpl`
   instantiates Saxon explicitly.
 
-So on eAttest, Chapter4 and Dmg the blocker was never the namespaces, and `dd028…`/`c6ea7e740`'s framing of
-that was wrong. What a caller gets for such an error today is the **code-only bypass**: the compile throws,
-`base` stays null, and Chapter4 returns every entry carrying that code — one, for code 141, so the answer
-looks right by accident. The acceptance smoke that returned "error uid 51 / code 156" came back the same way,
-which settles the tension `5cb8800f3` recorded. **The one-line fix is to give those nine domains the Saxon
-factory** (or raise `jdk.xml.xpathExprOpLimit`); it is not done, because Saxon is XPath 2.0 and the switch
-would change resolution semantics in a domain that is in service.
+So on **that** location the blocker was never the namespaces, and `dd28eb602`/`c6ea7e740`'s framing of it was
+wrong. What a caller gets for it today is Chapter4's **code-only bypass**: the compile throws, `base` stays
+null, and the filter returns every entry carrying that code — one, for code 141, so the answer looks right by
+accident. Only Chapter4 and Dmg have that bypass.
+
+**Do not widen the finding to eAttest — it is measured false there.** The 101 operators are Chapter IV's own
+predicates; nothing says another domain's location is that long, and for eAttest v3 the acceptance smoke
+proves the opposite. It returned `uid 51` **alone** for code 156, while `eAttestErrors.json` carries four
+entries for that code and **no** null-path entry out of 158, and `EattestV3ServiceImpl` has no code-only
+bypass — so only `it.path == base` can have matched, i.e. the location compiled *and* resolved. The real
+eAttest url is published nowhere, so its shape is unknown and the tension `5cb8800f3` recorded stays **open**;
+the WARN branches are what will settle it. `theEattestSmokeCouldOnlyHaveComeFromAResolvedPath` pins the three
+facts so the claim cannot be re-widened by reading.
+
+Two ways to make the Chapter IV location resolve, neither done: **raise the cap** with
+`-Djdk.xml.xpathExprOpLimit=200`, a system property like the `retry.activated` one above and no code change;
+or **give the domain the Saxon factory**. The second is not the one-line change it looks like — EattestV3,
+EattestV2, Eattest and Mhm bind a `ns1` `NamespaceContext` and evaluate `ns1:cd[…]` inside their own
+`nodeDescr`, so the switch drags those along, and Saxon is XPath 2.0 in domains that are in service.
+
+What the audit **confirmed** rather than overturned: the official examples independently validate the
+catalogue path corrections — `kmehrResponseWithError.xml` and `mha-request-detail.xml` show `request`,
+`folder`, `author`, `transaction`, `item`, `agreementtype`, `cga`, `cgd` all lowercase and
+`SendTransactionRequest/kmehrmessage` directly nested, which is what the nine catalogues were aligned on;
+MDA's uid 5 location is observed **verbatim** in the packaging's synchronous scenario
+(`careprovider-response-happy.xml`); `namespaceAgnostic` is measured idempotent on the real url; and the
+`#text` / `@name` notations hold on both channels.
 
 Still unobserved, and labelled as such: the `not(…)` step that `resolvableSteps` handles appears in no
 published document and in neither packaging — it is inferred from the catalogues' own `regex` column
-(`not.+Issuer`), which can only match a location containing `not(`. Both fallback branches log the raw
+(`not.+Issuer`), which can only match a location containing `not(`. So are attribute-step locations: the 11
+`@name` entries of `MemberDataErrors.json` are catalogue *paths*, and no example shows the CIN sending one. Both fallback branches log the raw
 location at WARN (`eattestv3: error … unresolved location` / `uncompilable location`) — read those to settle
 what really arrives.
 

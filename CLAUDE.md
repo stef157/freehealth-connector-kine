@@ -285,20 +285,40 @@ Hard-won details:
   `502 — SOA-02001: Service is not available. Please contact service desk.` (platform outage, nothing to fix locally).
   Raising log levels does not help: the SOAP body is not logged even at DEBUG.
 
-**Reading an eAttest error** — and note this is the opposite of the MDA advice below. Until `dd28eb602` the error
-catalogue was never consulted: `extractError` compiled the location MyCareNet sends against a namespace-qualified
-request with unprefixed name tests, so nothing resolved and every error came back as `code` plus
-*"Erreur générique, xpath invalide"*. Now the location is rewritten to `*[local-name()='…']` before compiling, and a
-`not(…)` step — the CIN notation for a *missing* element — resolves its parent so the entry's `regex` can match. So on
-eAttest, `msgFr` **is** the CIN message, and `uid`, `locFr`, `path` and `value` are filled: `path` is the readable
-`/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`, `value` the offending node **of your
-own request** (an SSIN, a NIHII, a date — don't show it to the practitioner unintentionally), and it is empty on a
-missing-element error, where only the parent resolved. An error absent from the 158 catalogue entries keeps the
-insurer's own `description` (`f1e1df793`).
-`EattestV3ErrorRenderingOfflineTest` measures all of it offline. What is still not measured is the real shape of the
-`url`: no captured acknowledgement error exists in the repository, and the shape above is inferred from the CIN xpath
-column transcribed into `MemberDataErrors.json`. Both fallback branches now log it at WARN
-(`eattestv3: error … unresolved location` / `uncompilable location`) — read those logs to settle it.
+**Reading an eAttest error.** The catalogue entries carry the CIN message, the `uid`, `locFr` and a readable
+`path` (`/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`), plus `value`, the
+offending node **of your own request** — an SSIN, a NIHII, a date, so don't show it to the practitioner
+unintentionally. An error absent from the 158 entries keeps the insurer's own `description` (`f1e1df793`).
+`EattestV3ErrorRenderingOfflineTest` measures the rendering offline, and `f770a0e42` / `08a5771b6` stopped it
+handing back the shared catalogue entry itself.
+
+**But on the one `url` MyCareNet is actually observed to send, none of that resolution runs — and it never
+did.** `connector-packaging-*-5.1.0-java/config/kmehrcommons/examples/kmehrResponseWithError.xml` publishes
+the only kmehr acknowledgement location there is (error 141), and two measured facts follow
+(`ObservedErrorLocationsTest`):
+
+- MyCareNet writes it **already namespace-agnostic** — `*[local-name()='x' and namespace-uri()='y']`, with
+  sub-predicates pinning `id`/`cd` values — so `ErrorLocationPath.namespaceAgnostic` is a **no-op** on it.
+  The rewrite neither helps nor harms here; it is MDA's `*:name` form that needed it.
+- It carries **101 operators**, one over the JDK's `jdk.xml.xpathExprOpLimit` default of 100.
+  `XPathFactory.newInstance()` — what nine of the ten domains get, Saxon-HE declaring no service file —
+  refuses it with `JAXP0801002`, before the resolution work and after. **Saxon compiles the same string** and
+  resolves it to the author's `id`, exactly what error 141 designates; only `MemberDataServiceImpl`
+  instantiates Saxon explicitly.
+
+So on eAttest, Chapter4 and Dmg the blocker was never the namespaces, and `dd028…`/`c6ea7e740`'s framing of
+that was wrong. What a caller gets for such an error today is the **code-only bypass**: the compile throws,
+`base` stays null, and Chapter4 returns every entry carrying that code — one, for code 141, so the answer
+looks right by accident. The acceptance smoke that returned "error uid 51 / code 156" came back the same way,
+which settles the tension `5cb8800f3` recorded. **The one-line fix is to give those nine domains the Saxon
+factory** (or raise `jdk.xml.xpathExprOpLimit`); it is not done, because Saxon is XPath 2.0 and the switch
+would change resolution semantics in a domain that is in service.
+
+Still unobserved, and labelled as such: the `not(…)` step that `resolvableSteps` handles appears in no
+published document and in neither packaging — it is inferred from the catalogues' own `regex` column
+(`not.+Issuer`), which can only match a location containing `not(`. Both fallback branches log the raw
+location at WARN (`eattestv3: error … unresolved location` / `uncompilable location`) — read those to settle
+what really arrives.
 
 ### Calling MDA (Member Data)
 

@@ -234,6 +234,11 @@ class EattestV3ErrorRenderingOfflineTest {
     fun namespaceAgnosticIsIdempotent() {
         val once = service.namespaceAgnostic("/SendTransactionRequest/kmehrmessage/folder/transaction[cga]")
         assertThat(service.namespaceAgnostic(once)).isEqualTo(once)
+
+        // The interesting case: the rewrite emits quotes of its own, so a second pass sees literals that the
+        // first one wrote. `local-name` is a function call and `'item'` a literal, both left alone.
+        val withLiteral = service.namespaceAgnostic("""/item[not(cd[@S='CD-ITEM' and .='patientpaid'])]""")
+        assertThat(service.namespaceAgnostic(withLiteral)).isEqualTo(withLiteral)
     }
 
     /**

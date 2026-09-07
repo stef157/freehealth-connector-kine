@@ -299,7 +299,10 @@ class GenInsServiceImpl(val stsService: STSService) : GenInsService {
                         node = node.parentNode
                     }
                     val elements =
-                        GenInsErrors.values.filter {(it.path == null || it.path == base) && it.code == ec }
+                        GenInsErrors.values.filter {
+                            (it.path == null || it.path == base) && it.code == ec &&
+                                (it.regex == null || curratedUrl.matches(Regex(".*" + it.regex + ".*")))
+                        }
                     result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                 } else {
                     log.warn("genins: error $ec, unresolved location `$url\u00b4")

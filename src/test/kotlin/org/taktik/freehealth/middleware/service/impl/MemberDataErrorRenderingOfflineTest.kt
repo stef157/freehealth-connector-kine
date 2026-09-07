@@ -136,6 +136,61 @@ class MemberDataErrorRenderingOfflineTest {
     }
 
     /**
+     * Eight entries of this catalogue are told apart by their `regex` alone, and MDA never read it.
+     *
+     * They all carry the same code, `urn:oasis:names:tc:SAML:2.0:status:Requester`, and they overlap
+     * pairwise on the path: uid 13 `not.+Issuer` and uid 21 `not.+Extensions` both sit on
+     * `/AttributeQuery`; uid 36 `not.+NameID` and uid 50 `not.+SubjectConfirmation` both on
+     * `/AttributeQuery/Subject`. The `regex` matches the location MyCareNet sent — which is why a `not(…)`
+     * step has to be dropped for resolution but kept for the match. Without the clause, a missing `Issuer`
+     * answered "Balise d'émetteur manquante" *and* "Balise Extensions manquantes", one of which is false.
+     */
+    @Test
+    fun aMissingIssuerRendersThatOneEntry() {
+        val errors = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            null,
+            "/AttributeQuery/not(*:Issuer)",
+            null
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("13")
+        assertThat(errors.single().msgFr).isEqualTo("Balise d'émetteur manquante")
+        assertThat(errors.single().value)
+            .describedAs("the location named an element that is not there; the parent's content is not it")
+            .isNull()
+    }
+
+    /** The other half of the same pair — what proves the `regex` discriminates rather than luck. */
+    @Test
+    fun aMissingExtensionsRendersTheOtherEntry() {
+        val errors = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            null,
+            "/AttributeQuery/not(*:Extensions)",
+            null
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("21")
+    }
+
+    /** The deeper pair, which also goes through the predicate-stripping second filter. */
+    @Test
+    fun aMissingNameIdRendersThatOneEntry() {
+        val errors = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            null,
+            "/AttributeQuery/Subject/not(*:NameID)",
+            null
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("36")
+    }
+
+    /**
      * A location the CIN writes in its own notation must not take the response down.
      *
      * `MemberDataErrors.json` indexes nine of its own entries as

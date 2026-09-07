@@ -37,6 +37,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import jakarta.xml.bind.JAXBContext
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.entry
 import org.junit.Test
 import org.mockito.Mockito.mock
 import org.taktik.connector.technical.utils.MarshallerHelper
@@ -211,6 +212,36 @@ class ErrorCatalogueReachabilityTest {
                           "Chapter4AgreementErrors", "DmgConsultationErrors", "DmgNotificationErrors")
                        .filter { name -> catalogue(name).any { it.path == null } })
             .isEmpty()
+    }
+
+    /**
+     * Where `regex` exists at all — so that "the clause is inert here" is measured, not claimed.
+     *
+     * Only four of the sixteen catalogues carry one, and MDA's eight were the ones being ignored: its filter
+     * had no `regex` clause, and its eight entries all share the code `…status:Requester` and overlap
+     * pairwise on the path, so two contradictory messages came back together. GenIns had no clause either,
+     * but its catalogue carries no `regex` — the clause added there is inert today, and stops the next entry
+     * that needs one from falling into a filter that would ignore it.
+     */
+    @Test
+    fun onlyFourCataloguesCarryARegex() {
+        val mapper = ObjectMapper()
+        val counts = listOf(
+            "eAttestErrors", "mhmSubscriptionError", "ConsultTarifErrors",
+            "ConsultTarificationMediprimaErrors", "Chapter4AgreementErrors", "Chapter4ConsultationErrors",
+            "Chapter4ConsultationWarnings", "DmgConsultationErrors", "DmgNotificationErrors",
+            "DmgRegistrationErrors", "DmgListsConsultationErrors", "GenInsErrors", "MemberDataErrors"
+        ).associateWith { name ->
+            mapper.readValue<Array<MycarenetError>>(javaClass.getResourceAsStream("/be/errors/$name.json")!!)
+                .count { it.regex != null }
+        }.filterValues { it > 0 }
+
+        assertThat(counts).containsOnly(
+            entry("eAttestErrors", 27),
+            entry("ConsultTarifErrors", 11),
+            entry("MemberDataErrors", 8),
+            entry("ConsultTarificationMediprimaErrors", 1)
+        )
     }
 
     /**

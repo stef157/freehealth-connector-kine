@@ -928,12 +928,12 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                         node = node.parentNode
                     }
                     var elements =
-                        MemberDataErrors.values.filter { (it.path == null || it.path == base) && it.code == code1 && (code2 == null || it.subCode == code2) && (detailCode == null || it.detailCode == detailCode) }
+                        MemberDataErrors.values.filter { (it.path == null || it.path == base) && it.code == code1 && (code2 == null || it.subCode == code2) && (detailCode == null || it.detailCode == detailCode) && (it.regex == null || curratedUrl.matches(Regex(".*" + it.regex + ".*"))) }
 
                     if (elements.isEmpty()) {
                         val oBase = base.replace(Regex("\\[.+?\\]"), "")
                         elements =
-                            MemberDataErrors.values.filter { (it.path == null || it.path == oBase) && it.code == code1 && (code2 == null || it.subCode == code2) && (detailCode == null || it.detailCode == detailCode) }
+                            MemberDataErrors.values.filter { (it.path == null || it.path == oBase) && it.code == code1 && (code2 == null || it.subCode == code2) && (detailCode == null || it.detailCode == detailCode) && (it.regex == null || curratedUrl.matches(Regex(".*" + it.regex + ".*"))) }
                     }
 
                     result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })

@@ -326,9 +326,30 @@ Two traps when reading an MDA failure:
   words — upstream, uid 23 (`UNKNOWN_FACET`, *"A requested facet does not exist"*) carries a French message
   copy-pasted from uid 25 (`UNAUTHORIZED_FACET`), so an unknown facet reads as an access-rights refusal and the only
   tell is the article. That one entry is fixed here, but the same class of mistranslation may sit in the others.
-  `MycarenetError` also carries `path` — indexed per facet and per dimension, e.g.
-  `Facet[urn:be:cin:nippin:insurability]/Dimension[requestType]` — and `value`, which `extractError` fills with the
-  offending node from your own request (`MemberDataServiceImpl.kt:912`). Those name what the message never does.
+  `MycarenetError` also carries `path` — the catalogue indexes nine entries per facet and per dimension, e.g.
+  `/AttributeQuery/Extensions/Facet[urn:be:cin:nippin:insurability]/Dimension[requestType]` — and `value`, the
+  offending node from your own request. Those name what the message never does.
+
+**Until `c6ea7e740`, no MDA location resolved at all**, so none of the fields above were ever filled: every error
+*and every warning* came back as one entry with a null `uid` and *"Erreur générique, xpath invalide"*. The
+`AttributeQuery` is serialised with prefixes (`<ns3:AttributeQuery>`, `<ns6:Subject>`) while `extractError` parsed it
+with `isNamespaceAware = false`, which leaves `localName` null and makes every node answer only to its prefixed
+`nodeName` — so `/AttributeQuery` matched nothing. Three consequences to know:
+
+- **`myCarenetErrors` changed shape on calls that already worked.** A `Success` / `PartialAnswer` answer carrying uid 68
+  `MUTATION` or uid 96 `ONLY_FIVE_PERIODS_RETURNED` now returns that entry with its `uid`, `path` and `msgFr` instead
+  of the generic one. A `Success` with no `statusDetail` never entered the function and is untouched, as is a detail
+  with no `Location`.
+- **A location that is not an XPath used to fail the whole call** (`6dadc3fc8`). The CIN's own facet notation —
+  a bare URN inside a predicate, exactly the `path` form above — raises `Namespace prefix 'urn' has not been declared`,
+  and MDA was one of four copies of `extractError` with no try/catch, so the exception travelled up through
+  `errors.forEach` and answered 500 with no message. It now degrades to one entry naming the location and the reason.
+- **`value` is empty when the location named a missing element**, since only the parent resolved and its content is the
+  whole facet list. Same rule as eAttest.
+
+`MemberDataErrorRenderingOfflineTest` measures all of it offline, on the very `AttributeQuery` the service marshals.
+What is still not measured is the real shape of the `url` MyCareNet sends: no captured MDA acknowledgement error exists
+in the repository. `mda: error … uncompilable location` at WARN is what will settle it.
 
 `requestType` and `hcpQuality` do not affect this. The `requestType` query parameter is only consumed by the default
 facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`

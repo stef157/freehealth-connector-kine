@@ -1423,6 +1423,108 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
     }
 
     /**
+     * The same location path, made independent of namespaces.
+     *
+     * MyCareNet names the offending node with an unprefixed path — or with the wildcard prefix `*:name`, the
+     * notation the CIN error tables use — while the request we resolve it against is marshalled qualified,
+     * over three namespaces: `messageservices/protocol/v1` for the root, `messageservices/core/v1` for
+     * `request` and `kmehrmessage`, `standards/kmehr/schema/v1` for everything below. A `NamespaceContext`
+     * cannot bridge that — in XPath 1.0 an unprefixed name test always means "no namespace", and there is no
+     * single namespace to bind anyway. So every element name test, bare or prefixed, becomes
+     * `*[local-name()='name']`, which matches the element whichever namespace it sits in. Predicates chain
+     * onto it unchanged, so the expression stays equivalent:
+     * `item[not(cd[@S='CD-ITEM'])]` → `*[local-name()='item'][not(*[local-name()='cd'][@S='CD-ITEM'])]`.
+     *
+     * Left alone: quoted literals (both quote styles arrive from the OAs), attribute tests together with
+     * their prefix (`@S`, `@xsi:type` — attributes in these schemas are unqualified), function and node-type
+     * calls (an NCName followed by `(`: `not`, `text`, `count`), axes (`child::`), `.`, `..`, a bare `*`,
+     * numbers, and the four operator words. The rewrite is idempotent: an already agnostic path comes back
+     * unchanged.
+     */
+    internal fun namespaceAgnostic(locationPath: String): String {
+        val operators = setOf("and", "or", "div", "mod")
+        fun isNameStart(c: Char) = c.isLetter() || c == '_'
+        fun isNameChar(c: Char) = c.isLetterOrDigit() || c == '_' || c == '-' || c == '.'
+        fun nameEnd(from: Int): Int {
+            var i = from
+            while (i < locationPath.length && isNameChar(locationPath[i])) i++
+            return i
+        }
+
+        val out = StringBuilder()
+        var i = 0
+        while (i < locationPath.length) {
+            val c = locationPath[i]
+            when {
+                // A literal is copied verbatim: it may well hold a word that looks like an element name.
+                c == '\'' || c == '"' -> {
+                    val closing = locationPath.indexOf(c, i + 1)
+                    val end = if (closing < 0) locationPath.length - 1 else closing
+                    out.append(locationPath, i, end + 1)
+                    i = end + 1
+                }
+                // An attribute test keeps its prefix; these schemas leave attributes unqualified.
+                c == '@' -> {
+                    out.append(c)
+                    var j = i + 1
+                    while (j < locationPath.length && (isNameChar(locationPath[j]) || locationPath[j] == ':')) j++
+                    out.append(locationPath, i + 1, j)
+                    i = j
+                }
+                // `*:name`, the CIN notation — a wildcard prefix on a real name test.
+                c == '*' && i + 1 < locationPath.length && locationPath[i + 1] == ':' -> {
+                    val end = nameEnd(i + 2)
+                    if (end > i + 2) {
+                        out.append("*[local-name()='").append(locationPath, i + 2, end).append("']")
+                        i = end
+                    } else {
+                        out.append(c)
+                        i++
+                    }
+                }
+                isNameStart(c) -> {
+                    val end = nameEnd(i)
+                    val name = locationPath.substring(i, end)
+                    val next = locationPath.getOrNull(end)
+                    val afterNext = locationPath.getOrNull(end + 1)
+                    when {
+                        // An axis: `child::`, `descendant::`. Copied, the name test after it is rewritten.
+                        next == ':' && afterNext == ':' -> {
+                            out.append(name).append("::")
+                            i = end + 2
+                        }
+                        // A prefixed name test: the prefix goes, the local name stays.
+                        next == ':' -> {
+                            val localEnd = nameEnd(end + 1)
+                            if (localEnd > end + 1) {
+                                out.append("*[local-name()='").append(locationPath, end + 1, localEnd).append("']")
+                                i = localEnd
+                            } else {
+                                out.append(name)
+                                i = end
+                            }
+                        }
+                        // A function or node-type call, and the operator words: not name tests.
+                        next == '(' || name in operators -> {
+                            out.append(name)
+                            i = end
+                        }
+                        else -> {
+                            out.append("*[local-name()='").append(name).append("']")
+                            i = end
+                        }
+                    }
+                }
+                else -> {
+                    out.append(c)
+                    i++
+                }
+            }
+        }
+        return out.toString()
+    }
+
+    /**
      * A catalogue entry rendered for one node of one request.
      *
      * `eAttestErrors` is read once into this singleton `@Service`, so its `MycarenetError` entries are shared by
@@ -1476,7 +1578,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
 
             try {
                 val xpath = xPathFactory.newXPath()
-                val expr = xpath.compile(curratedUrl)
+                val expr = xpath.compile(namespaceAgnostic(curratedUrl))
 
             (expr.evaluate(
                 builder.parse(ByteArrayInputStream(sendTransactionRequest)),

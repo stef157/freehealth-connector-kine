@@ -24,10 +24,19 @@ import be.fgov.ehealth.messageservices.mycarenet.core.v1.RequestType
 import be.fgov.ehealth.messageservices.mycarenet.core.v1.SendTransactionRequest
 import be.fgov.ehealth.standards.kmehr.mycarenet.cd.v1.CDERRORMYCARENET
 import be.fgov.ehealth.standards.kmehr.mycarenet.cd.v1.CDERRORMYCARENETschemes
+import be.fgov.ehealth.standards.kmehr.mycarenet.cd.v1.CDTRANSACTION
+import be.fgov.ehealth.standards.kmehr.mycarenet.cd.v1.CDTRANSACTIONschemes
 import be.fgov.ehealth.standards.kmehr.mycarenet.dt.v1.TextType
+import be.fgov.ehealth.standards.kmehr.mycarenet.id.v1.IDHCPARTY
+import be.fgov.ehealth.standards.kmehr.mycarenet.id.v1.IDHCPARTYschemes
 import be.fgov.ehealth.standards.kmehr.mycarenet.id.v1.IDKMEHR
 import be.fgov.ehealth.standards.kmehr.mycarenet.id.v1.IDKMEHRschemes
+import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.AuthorType
 import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.ErrorMyCarenetType
+import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.FolderType
+import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.HcpartyType
+import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.Kmehrmessage
+import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.TransactionType
 import org.taktik.connector.business.recipeprojects.core.utils.MarshallerHelper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
@@ -174,6 +183,59 @@ class EattestV3ErrorRenderingOfflineTest {
         assertThat(first).isNotSameAs(second)
     }
 
+    /**
+     * The rewrite that makes a location path independent of namespaces, measured on the notation the CIN
+     * error tables actually use — unprefixed steps, the wildcard prefix `*:name`, `not(…)`, `text()`,
+     * attribute tests, and literals in either quote style.
+     */
+    @Test
+    fun namespaceAgnosticRewritesEveryElementNameTest() {
+        val agnostic = { path: String -> service.namespaceAgnostic(path) }
+
+        assertThat(agnostic("/SendTransactionRequest/request/id"))
+            .isEqualTo("/*[local-name()='SendTransactionRequest']/*[local-name()='request']/*[local-name()='id']")
+
+        // The CIN notation: a wildcard prefix is a name test too.
+        assertThat(agnostic("/AttributeQuery/*:Issuer"))
+            .isEqualTo("/*[local-name()='AttributeQuery']/*[local-name()='Issuer']")
+
+        // A real prefix is today a compile error, for want of a NamespaceContext. The prefix goes.
+        assertThat(agnostic("/ns1:cd[@S='CD-ITEM']"))
+            .isEqualTo("/*[local-name()='cd'][@S='CD-ITEM']")
+
+        // An attribute keeps its prefix — attributes in these schemas are unqualified.
+        assertThat(agnostic("/AttributeQuery/Extensions/@xsi:type"))
+            .isEqualTo("/*[local-name()='AttributeQuery']/*[local-name()='Extensions']/@xsi:type")
+
+        // A function is not a name test, and neither is a node type test.
+        assertThat(agnostic("/AttributeQuery/Issuer/text()"))
+            .isEqualTo("/*[local-name()='AttributeQuery']/*[local-name()='Issuer']/text()")
+
+        // A bare wildcard stays a wildcard.
+        assertThat(agnostic("/SubjectConfirmation/*"))
+            .isEqualTo("/*[local-name()='SubjectConfirmation']/*")
+    }
+
+    /** A word inside a literal only looks like an element name. It must survive untouched. */
+    @Test
+    fun namespaceAgnosticLeavesLiteralsAlone() {
+        assertThat(service.namespaceAgnostic("""/transaction[not(cd[@S='CD-ITEM' and .='patientpaid'])]"""))
+            .isEqualTo(
+                "/*[local-name()='transaction'][not(*[local-name()='cd'][@S='CD-ITEM' and .='patientpaid'])]"
+            )
+
+        // Both quote styles arrive from the OAs — the ConsultTarif catalogue spells the class ['"] out.
+        assertThat(service.namespaceAgnostic("""/item[cd[@SL="NIHDI-TREATED-LIMB"]]"""))
+            .isEqualTo("""/*[local-name()='item'][*[local-name()='cd'][@SL="NIHDI-TREATED-LIMB"]]""")
+    }
+
+    /** Rewriting an already agnostic path changes nothing, so a double pass is harmless. */
+    @Test
+    fun namespaceAgnosticIsIdempotent() {
+        val once = service.namespaceAgnostic("/SendTransactionRequest/kmehrmessage/folder/transaction[cga]")
+        assertThat(service.namespaceAgnostic(once)).isEqualTo(once)
+    }
+
     /** No error, or no acknowledged error list at all, is not an error. */
     @Test
     fun anAcknowledgementWithoutErrorsRendersNone() {
@@ -181,21 +243,16 @@ class EattestV3ErrorRenderingOfflineTest {
         assertThat(service.errorsOf(listOf(), request())).isEmpty()
     }
     /**
-     * What the catalogue is worth on a real request, measured — and today the answer is nothing.
+     * The catalogue is consulted on the request the call sites really send.
      *
-     * `extractError` resolves the error url with a plain `XPath` carrying no `NamespaceContext`, while the request
-     * it resolves against is the one the two call sites actually send: `MarshallerHelper(SendTransactionRequest…)`
-     * marshals it namespace-qualified (`elementFormDefault = QUALIFIED`), the root under
-     * `messageservices/protocol/v1` and its children under `messageservices/core/v1`. The catalogue's paths are
-     * unprefixed, an unprefixed XPath name test matches only names in no namespace, so the nodeset comes back
-     * empty and every error takes the "xpath invalide" branch: the code survives, but `uid`, `value` and the
-     * catalogue's own 158 messages never do.
-     *
-     * This pins a defect, not a wanted behaviour. It is the measurement behind the note in f1e1df793, and it
-     * should go red the day the resolution is made namespace-aware — that is the point of it.
+     * The inverse of what `5cb8800f3` pinned. `MarshallerHelper(SendTransactionRequest…)` marshals the
+     * request qualified — root `ns5:SendTransactionRequest` under `messageservices/protocol/v1`, its children
+     * under the default `messageservices/core/v1` — while the catalogue's paths are unprefixed, so the
+     * unprefixed name tests matched nothing and every error fell to "xpath invalide", losing `uid`, `path`,
+     * `value` and the catalogue's 158 messages. Resolution now goes through `namespaceAgnostic`.
      */
     @Test
-    fun theCatalogueIsNotConsultedOnARealMarshalledRequest() {
+    fun theCatalogueIsConsultedOnARealMarshalledRequest() {
         val request = SendTransactionRequest().apply {
             this.request = RequestType().apply {
                 id = IDKMEHR().apply {
@@ -212,7 +269,7 @@ class EattestV3ErrorRenderingOfflineTest {
             .describedAs("the request the call sites send is namespace-qualified")
             .contains("""xmlns="http://www.ehealth.fgov.be/messageservices/core/v1"""")
 
-        // uid 1 of the catalogue: path /SendTransactionRequest/request/id, code 111 — the pair this request holds.
+        // uid 1 of the catalogue: path /SendTransactionRequest/request/id, code 111 — the pair this holds.
         val error = service.errorsOf(
             listOf(
                 acknowledgeError(
@@ -224,9 +281,70 @@ class EattestV3ErrorRenderingOfflineTest {
             marshalled
         ).single()
 
-        assertThat(error.code).describedAs("the code always survives").isEqualTo("111")
-        assertThat(error.msgFr).isEqualTo("Erreur générique, xpath invalide")
-        assertThat(error.uid).describedAs("no catalogue entry was reached").isNull()
-        assertThat(error.value).describedAs("nor the offending node").isNull()
+        assertThat(error.uid).describedAs("the catalogue entry was reached").isEqualTo("1")
+        assertThat(error.code).isEqualTo("111")
+        assertThat(error.msgFr)
+            .isEqualTo("Le format de l'identification de la requête n'est pas complété ou est erroné")
+        assertThat(error.locFr).isEqualTo("Id de la requête")
+        assertThat(error.path).isEqualTo("/SendTransactionRequest/request/id")
+        assertThat(error.value)
+            .describedAs("the offending node of our own request")
+            .isEqualTo("00000000000.20260907120000")
+    }
+
+    /**
+     * A node deep inside the kmehr message, where the predicates `nodeDescr` rebuilds have to line up with
+     * the catalogue's own — half the value of the fix, and never exercised until now.
+     *
+     * The entry is uid 51, code 156,
+     * `/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`: the author of the CGA
+     * transaction disagreeing with the author of the request. That is the very error CLAUDE.md's smoke of
+     * 31/08 reports on the author NIHII.
+     */
+    @Test
+    fun aDeepKmehrNodeMatchesItsCataloguePredicates() {
+        val request = SendTransactionRequest().apply {
+            kmehrmessage = Kmehrmessage().apply {
+                folders.add(FolderType().apply {
+                    transactions.add(TransactionType().apply {
+                        cds.add(CDTRANSACTION().apply {
+                            s = CDTRANSACTIONschemes.CD_TRANSACTION_MYCARENET
+                            sv = "1.0"
+                            value = "cga"
+                        })
+                        author = AuthorType().apply {
+                            hcparties.add(HcpartyType().apply {
+                                ids.add(IDHCPARTY().apply {
+                                    s = IDHCPARTYschemes.ID_HCPARTY
+                                    sv = "1.0"
+                                    value = "00000000000"
+                                })
+                            })
+                        }
+                    })
+                })
+            }
+        }
+        val marshalled = MarshallerHelper(SendTransactionRequest::class.java, SendTransactionRequest::class.java)
+            .toXMLByteArray(request)
+
+        val error = service.errorsOf(
+            listOf(
+                acknowledgeError(
+                    code = "156",
+                    scheme = CDERRORMYCARENETschemes.CD_ERROR,
+                    url = "/SendTransactionRequest/kmehrmessage/folder/transaction/author/hcparty/id"
+                )
+            ),
+            marshalled
+        ).single()
+
+        assertThat(error.uid)
+            .describedAs("nodeDescr must rebuild transaction[cga] to meet the catalogue")
+            .isEqualTo("51")
+        assertThat(error.path)
+            .isEqualTo("/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id")
+        assertThat(error.value).isEqualTo("00000000000")
+        assertThat(error.msgFr).contains("incohérente avec celle de l'auteur de la requête")
     }
 }

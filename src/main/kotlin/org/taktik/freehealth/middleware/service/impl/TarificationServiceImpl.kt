@@ -319,17 +319,35 @@ class TarificationServiceImpl(private val stsService: STSService) : Tarification
             factory.isNamespaceAware = true
             val builder = factory.newDocumentBuilder()
 
-            val xpath = xPathfactory.newXPath()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
             val namesAMissingElement = resolvableUrl != curratedUrl
-            val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
             val result = mutableSetOf<MycarenetError>()
 
-            (expr.evaluate(
-                builder.parse(ByteArrayInputStream(sendTransactionRequest)),
-                XPathConstants.NODESET
-            ) as NodeList).let { it ->
+            val nodes = runCatching {
+                val xpath = xPathfactory.newXPath()
+                val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
+                expr.evaluate(
+                    builder.parse(ByteArrayInputStream(sendTransactionRequest)),
+                    XPathConstants.NODESET
+                ) as NodeList
+            }.getOrElse { e ->
+                // The CIN writes some locations in a notation that is not XPath at all — a bare URN inside a
+                // predicate, for one. Six of the ten copies of this function already caught that; here the
+                // exception left `extractError` and took the whole response down with it.
+                log.warn("tarification: error $ec, uncompilable location `$url\u00b4", e)
+                result.add(
+                    MycarenetError(
+                        code = ec,
+                        path = curratedUrl,
+                        msgFr = "Erreur générique, xpath invalide : " + e.message,
+                        msgNl = "Onbekend foutmelding, xpath ongeldig : " + e.message
+                    )
+                )
+                null
+            }
+
+            nodes?.let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
                     val textContent = if (namesAMissingElement) null else node.textContent

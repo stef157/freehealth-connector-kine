@@ -797,7 +797,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         ) { "hcpQuality is invalid" }
     }
 
-    private fun getAttrQuery(inputRef: String,
+    internal fun getAttrQuery(inputRef: String,
                              issueInstant: XMLGregorianCalendar,
                              facets: List<Facet>?,
                              hospitalized: Boolean?,
@@ -877,21 +877,42 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
     }
 
 
-    private fun extractError(sendTransactionRequest: ByteArray, code1: String?, code2: String?, errorUrl: String?, detailCode: String?): Set<MycarenetError> {
+    internal fun extractError(sendTransactionRequest: ByteArray, code1: String?, code2: String?, errorUrl: String?, detailCode: String?): Set<MycarenetError> {
         //For some reason... The path starts with ../../../../ which corresponds to the request
         return errorUrl?.let { url ->
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = false
             val builder = factory.newDocumentBuilder()
 
-            val xpath = xPathFactory()
-            val expr = xpath.compile(if (url.startsWith("/")) url else "/$url")
+            val curratedUrl = if (url.startsWith("/")) url else "/$url"
             val result = mutableSetOf<MycarenetError>()
 
-            (expr.evaluate(
-                builder.parse(ByteArrayInputStream(sendTransactionRequest)),
-                XPathConstants.NODESET
-            ) as NodeList).let { it ->
+            val nodes = runCatching {
+                val xpath = xPathFactory()
+                val expr = xpath.compile(curratedUrl)
+                expr.evaluate(
+                    builder.parse(ByteArrayInputStream(sendTransactionRequest)),
+                    XPathConstants.NODESET
+                ) as NodeList
+            }.getOrElse { e ->
+                // The CIN writes some locations in a notation that is not XPath at all — a bare URN inside a
+                // predicate, for one, which is how this catalogue itself indexes nine of its entries. Six of
+                // the ten copies of this function already caught that; here the exception left `extractError`
+                // and took the whole MDA response down with it.
+                log.warn("mda: error $code1, uncompilable location `$url\u00b4", e)
+                result.add(
+                    MycarenetError(
+                        code = code1,
+                        subCode = code2,
+                        path = curratedUrl,
+                        msgFr = "Erreur générique, xpath invalide : " + e.message,
+                        msgNl = "Onbekend foutmelding, xpath ongeldig : " + e.message
+                    )
+                )
+                null
+            }
+
+            nodes?.let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
                     val textContent = if (node.hasChildNodes() && node.childNodes.length > 1) ConnectorXmlUtils.toString(node) else node.textContent

@@ -385,9 +385,23 @@ Two things that stay as they are. § 3 of the published examples (`BO_UNKNOWN_RE
 its entry uid 78 sits at path `/`, which no compared path equals: it stays in the fallback on both channels. And
 a `text()` step is deliberately **not** made to fall back on the element that carries it — that would reach the
 value entries (uid 39, 40, 45, 46, all at `/AttributeQuery/Subject/NameID`) at the cost of making GenIns's 21
-correct entries unreachable. The two readings exclude each other. An **attribute** step (`…/@Format` as a step,
-not the `[@Format='…']` predicate, which is handled) has the same shape and is likewise untouched: no published
-example uses one and no catalogue is written that way.
+correct entries unreachable. The two readings exclude each other.
+
+**An attribute step is written `@name`, and `MemberDataErrors.json` indexes eleven entries that way** — which
+is the opposite of what this file said one commit earlier ("no catalogue is written that way"; that was the
+fourth documented claim this work has had to withdraw). uid 6 `@ID`, uid 15 and 38/43/44 `@Format`, uid 20
+`@xsi:type`, uid 49 `@Method`, and **uid 53/54/55/57 on `@NotBefore` / `@NotOnOrAfter`** — the coverage window
+`getAttrQuery` writes `date` and `endDate` into. A DOM attribute has no `parentNode`, so the climb in
+`extractError` never ran and `base` came out as the bare name: `@Format` gave `/Format`, `@NotBefore` gave
+`/NotBefore`. Fixed in `5c9c6d3aa` — `nodeDescr` writes an `Attr` as `@` plus its qualified name and the climb
+starts from the `ownerElement`.
+
+The synchronous channel now reaches **eleven of eleven**, uid 20 included: Saxon binds `xsi` in its default
+static context, so `@xsi:type` compiles and resolves. The async overload reaches **ten** — it already matched
+these paths, comparing the location textually, but its `*`/`:` stripping turns `@xsi:type` into `@xsitype`.
+That is the one place where the async channel is behind the synchronous one; everywhere else in this section it
+is the other way round. uid 58 `INVALID_PERIOD_FOR_SECTOR` and uid 59 `PERIOD_TOO_FAR_IN_PAST` sit on the
+**element** and were always reachable — uid 59 is what `date=20210101` really returns.
 
 **The async channel** (`POST /mda/async/messages`) has its **own** `extractError` overload, and it works
 differently: no request document travels with an acknowledgement, so there is nothing to resolve against and the

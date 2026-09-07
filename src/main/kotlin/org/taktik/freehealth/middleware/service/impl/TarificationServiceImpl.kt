@@ -339,7 +339,7 @@ class TarificationServiceImpl(private val stsService: STSService) : Tarification
                         node = node.parentNode
                     }
                     val initialElements = ConsultTarifErrors.values.filter {
-                        it.path == base && it.code == ec && (it.regex == null || url.matches(Regex(".*${it.regex}.*")))
+                        (it.path == null || it.path == base) && it.code == ec && (it.regex == null || url.matches(Regex(".*${it.regex}.*")))
                     }
 
                     val elements = if (initialElements.isEmpty()) {

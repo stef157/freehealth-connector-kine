@@ -472,7 +472,7 @@ class MediprimaServiceImpl(val stsService: STSService, keyDepotService: KeyDepot
                         node = node.parentNode
                     }
                     val initialElements = ConsultTarifErrors.values.filter {
-                        it.path == base && it.code == ec && (it.regex == null || url.matches(Regex(".*${it.regex}.*")))
+                        (it.path == null || it.path == base) && it.code == ec && (it.regex == null || url.matches(Regex(".*${it.regex}.*")))
                     }
 
                     val elements = if (initialElements.isEmpty()) {

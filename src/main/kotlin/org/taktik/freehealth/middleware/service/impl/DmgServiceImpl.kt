@@ -1265,7 +1265,7 @@ class DmgServiceImpl(private val stsService: STSService) : DmgService {
             }
         }
 
-        var elements = errors.values.filter { (base == null || it.path == base) && it.code == ec && (it.regex == null || (url?.matches(Regex(".*" + it.regex + ".*")) ?: true)) }
+        var elements = errors.values.filter { (it.path == null || base == null || it.path == base) && it.code == ec && (it.regex == null || (url?.matches(Regex(".*" + it.regex + ".*")) ?: true)) }
         if (base != null && elements.isEmpty()) {
             //IOs sometimes are overeager to provide us with precise xpath. Let's try again while truncating after the item
             val trimmedBase = base.replace(Regex("(.+/item.+?)/.*"), "$1")

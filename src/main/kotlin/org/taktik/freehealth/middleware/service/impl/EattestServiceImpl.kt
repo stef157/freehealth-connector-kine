@@ -932,7 +932,7 @@ class EattestServiceImpl(private val stsService: STSService, private val keyDepo
                         }
                         val elements =
                             eAttestErrors.values.filter {
-                                it.path == base && it.code == ec && (it.regex == null || url.matches(Regex(".*" + it.regex + ".*")))
+                                (it.path == null || it.path == base) && it.code == ec && (it.regex == null || url.matches(Regex(".*" + it.regex + ".*")))
                             }
                         result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                     } else {

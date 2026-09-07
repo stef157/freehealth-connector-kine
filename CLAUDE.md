@@ -348,11 +348,12 @@ to its prefixed `nodeName`. `c6ea7e740` says "no MDA location resolved, ever"; t
 what it should have said. Four consequences to know:
 
 **The `Location` shapes are documented, not guessed** — `FR-EXEM-MEMD-ALL Données du membre Async - exemples de
-réponses.pdf` (April 2021) publishes five, and they are the only observed ones: `*:AttributeQuery/*:Subject/*:NameID`
+réponses.pdf` (April 2021) publishes six examples carrying **four** distinct values, and they are the only observed
+ones: `*:AttributeQuery/*:Subject/*:NameID`
 (`UNKNOWN_NISS_ROUTING`), the same plus `[@Format='urn:be:cin:nippin:member:ssin@mut']` (`BO_INVALID_REGNBR`), the same
 again with a leading slash and a trailing `text()` (`BO_UNKNOWN_REGNBR`), and an **empty** element for
 `IOSM_EXCEPTION` / `BO_EXCEPTION` / `NO_FACET`. So the form is `*:name` — which is exactly what the rewrite handles,
-the URN in the predicate surviving because it sits between quotes. `MemberDataErrorRenderingOfflineTest` runs all five.
+the URN in the predicate surviving because it sits between quotes. `MemberDataErrorRenderingOfflineTest` runs all four.
 
 - **A `Success` call is untouched.** It never enters the function without a `statusDetail`, and the `PartialAnswer`
   warning example in `FR-MPTI-MEMD-ALL … R9.pdf` p. 14 carries `DetailCode` / `DetailSource` / `Message` and **no
@@ -366,7 +367,7 @@ the URN in the predicate surviving because it sits between quotes. `MemberDataEr
   the table above shows it was **pre-existing** — the `text()` form already returned `[]` before the batch. MDA now
   falls back to one entry carrying the code, the `detailCode` and the resolved path, like the nine other copies, and
   logs `mda: error … no entry for resolved path` at WARN.
-- **An uncompilable location no longer fails the whole call** (`6dadc3fc8`). None of the five published forms raises,
+- **An uncompilable location no longer fails the whole call** (`6dadc3fc8`). None of the published forms raises,
   so this is uniformity: MDA was one of four copies with no try/catch, and there the exception travelled up through
   `errors.forEach` and answered 500 with no message.
 - **`value` is empty when the location named a missing element**, since only the parent resolved. Same rule as eAttest.
@@ -377,8 +378,8 @@ One gap left: a location ending in `/text()` resolves the text node, so `nodeDes
 **The async channel** (`POST /mda/async/messages`) has its **own** `extractError` overload, and it works
 differently: no request document travels with an acknowledgement, so there is nothing to resolve against and the
 path is compared textually, every `*` and `:` stripped — which turns the `*:name` form into exactly the
-catalogue's path. It got the same treatment in `84c0eb6db`; three of the five published locations rendered nothing
-there before. Two differences to keep in mind:
+catalogue's path. It got the same treatment in `84c0eb6db`; **five of the six published examples** — three of the four
+distinct forms — rendered nothing there before, which the commit title undercounts. Two differences to keep in mind:
 
 - **It renders a warning that names no node, and the synchronous channel does not.** A missing `Location` leaves
   the compared path null, which matches uid 68 `MUTATION` and uid 96 `ONLY_FIVE_PERIODS_RETURNED` — where the
@@ -391,8 +392,10 @@ there before. Two differences to keep in mind:
   beside `myCarenetErrors` either way, so nothing is lost.
 
 Its filter is also **strict** on `subCode` and `detailCode` where the synchronous one is permissive
-(`detailCode == null || …`). That is why the `regex` clause is inert there: uid 13 and uid 21 share path and code
-but differ by `detailCode`. Deliberately not aligned — the strict form is the tighter of the two.
+(`detailCode == null || …`). That is why the `regex` clause does no separating work there: uid 13 and uid 21 share
+path and code but differ by `detailCode`. It cannot widen the match, and it narrows it only for a `MISSING_*` error
+whose location arrives without the `not(…)` the CIN's xpath column gives it — a case no published example settles.
+The strictness is deliberately not aligned: it is the tighter of the two forms.
 
 `requestType` and `hcpQuality` do not affect this. The `requestType` query parameter is only consumed by the default
 facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`

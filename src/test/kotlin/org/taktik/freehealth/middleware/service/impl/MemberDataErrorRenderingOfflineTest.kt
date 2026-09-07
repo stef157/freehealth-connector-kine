@@ -140,7 +140,8 @@ class MemberDataErrorRenderingOfflineTest {
     // ------------------------------------------------------------------ the documented locations
 
     /**
-     * The five `Location` values the CIN itself publishes, from
+     * The `Location` values the CIN itself publishes — six examples carrying four distinct values, the empty
+     * element appearing three times — from
      * `Sharepoint/Member Data/level 4/FR-EXEM-MEMD-ALL Données du membre Async - exemples de réponses.pdf`
      * (April 2021) — the only observed shapes there are, and none of them was guessed here:
      *
@@ -155,7 +156,7 @@ class MemberDataErrorRenderingOfflineTest {
      * | 4-6 | `IOSM_EXCEPTION`, `BO_EXCEPTION`, `NO_FACET` | empty element |
      *
      * So the form is `*:name` — prefixed with the wildcard namespace, sometimes without a leading slash,
-     * sometimes with an attribute predicate, sometimes ending in `text()`. That is exactly what
+     * sometimes with an attribute predicate, sometimes ending in `text()`, sometimes absent. That is what
      * `ErrorLocationPath.namespaceAgnostic` rewrites, and the URN inside the predicate survives because it
      * sits between quotes, which the rewrite copies verbatim.
      */
@@ -262,7 +263,7 @@ class MemberDataErrorRenderingOfflineTest {
     /**
      * A location that cannot be compiled must not take the response down.
      *
-     * The five locations the CIN publishes are all compilable (see above), so this is uniformity rather than
+     * The locations the CIN publishes are all compilable (see above), so this is uniformity rather than
      * an observed failure: MDA was one of four copies of `extractError` with no try/catch, and there any
      * `XPathExpressionException` left the function, travelled through `errors.forEach` in the response
      * builder, and failed the whole call — an error MyCareNet had reported precisely came back as a 500 with
@@ -297,8 +298,9 @@ class MemberDataErrorRenderingOfflineTest {
     /**
      * The same acknowledgement errors, on the overload that has no request document to resolve against —
      * `POST /mda/async/messages` → `getMemberDataMessages` (`MemberDataServiceImpl.kt:426`). The `Detail` is
-     * extracted there exactly as in the synchronous path, so the five published `Location` forms apply
-     * unchanged, and `FR-EXEM-MEMD-ALL … exemples de réponses.pdf` is the **async** document.
+     * extracted there exactly as in the synchronous path, so the published `Location` forms apply unchanged —
+     * six examples carrying four distinct values, the empty element appearing three times — and
+     * `FR-EXEM-MEMD-ALL … exemples de réponses.pdf` is the **async** document.
      *
      * With no document, the path is compared textually: stripping every `*` and `:` turns the
      * `*:AttributeQuery / *:Subject / *:NameID` the CIN sends into the catalogue's own
@@ -402,15 +404,32 @@ class MemberDataErrorRenderingOfflineTest {
                 "BO_INVALID_REGNBR"
             ).map { it.uid }
         ).containsExactly("77")
+
+        // And the widening that comes with reading blank and absent as the same thing: an absent location
+        // used to match only a null path, so it reached none of these four. Intended, and measured here.
+        assertThat(
+            async(
+                null,
+                "urn:oasis:names:tc:SAML:2.0:status:Responder",
+                "urn:be:cin:nippin:SAML:status:InternalError",
+                "BO_INVALID_REGNBR"
+            ).map { it.uid }
+        ).containsExactly("77")
     }
 
     /**
      * A `not(…)` step is the CIN notation for a missing element, and it has to be dropped for the path to
-     * match — that is the whole fix on this overload. The `regex` clause is added for uniformity with the
-     * ten other copies but is **inert here**, and this test is what shows why: the filter is strict on
-     * `detailCode`, and uid 13 `MISSING_ISSUER_TAG` and uid 21 `MISSING_EXTENSIONS_TAG` — which share both
-     * path and code — already differ by it. On the synchronous overload, whose filter is permissive, the
-     * same two came back as a contradictory pair.
+     * match — that is the whole fix on this overload.
+     *
+     * The `regex` clause comes with it for uniformity with the ten other copies, and it does no separating
+     * work here: the filter is strict on `detailCode`, and uid 13 `MISSING_ISSUER_TAG` and uid 21
+     * `MISSING_EXTENSIONS_TAG` — which share both path and code — already differ by it. On the synchronous
+     * overload, whose filter is permissive, the same two came back as a contradictory pair.
+     *
+     * The clause **cannot widen** the match, and it narrows it only in one case: a `MISSING_*` error whose
+     * location arrives *without* the `not(…)` the CIN's xpath column gives it would fall to the fallback
+     * instead of its entry. No published example settles that either way — so "does no separating work" is
+     * what is measured, not "inert".
      */
     @Test
     fun asyncRendersALocationThatNamesAMissingElement() {

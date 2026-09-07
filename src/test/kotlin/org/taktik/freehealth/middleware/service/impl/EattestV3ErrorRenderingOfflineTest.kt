@@ -349,4 +349,73 @@ class EattestV3ErrorRenderingOfflineTest {
         assertThat(error.value).isEqualTo("00000000000")
         assertThat(error.msgFr).contains("incohérente avec celle de l'auteur de la requête")
     }
+
+    /**
+     * **The url MyCareNet really sends for a kmehr acknowledgement error, observed on the acceptance
+     * platform.** Captured twice from `mycarenetConversation.transactionResponse` on scenario 8 of the CIN
+     * physiotherapist procedure — 26/08/2026 and 07/09/2026 — as the `kmehr:url` of error 156.
+     *
+     * Two things about its shape, and the second is why this test exists. MyCareNet writes it **already
+     * namespace-agnostic**, in the `* [local-name() = 'x']` form (separator spaced out here: Kotlin nests
+     * block comments and the raw form would open one). And unlike the Chapter IV location published in
+     * `kmehrResponseWithError.xml`, it pins **no** `namespace-uri()`, so it stays far under the JDK's
+     * `jdk.xml.xpathExprOpLimit` of 100 operators — which is why eAttest resolves where that one cannot
+     * compile at all. `ObservedErrorLocationsTest` measures the Chapter IV side.
+     */
+    private val observedUrl =
+        """*[local-name() = 'SendTransactionRequest']/*[local-name() = 'kmehrmessage']/*[local-name() = 'folder']/*[local-name() = 'transaction'][*[local-name() = 'cd'][.="cga"]]/*[local-name() = 'author']/*[local-name() = 'hcparty']/*[local-name() = 'id'][@S="ID-HCPARTY"]"""
+
+    /**
+     * The request shape the url is resolved against, with the three namespaces the wire really carries —
+     * `messageservices/protocol/v1` on the root, `messageservices/core/v1` on `kmehrmessage`,
+     * `standards/kmehr/schema/v1` below — measured on the same captures. Identifiers are synthetic: this
+     * fixture is committed, and a real capture carries a patient SSIN.
+     */
+    private fun qualifiedRequest(authorNihii: String = "00000000000") =
+        ("""<ns5:SendTransactionRequest xmlns:ns5="http://www.ehealth.fgov.be/messageservices/protocol/v1" """ +
+            """xmlns="http://www.ehealth.fgov.be/messageservices/core/v1" """ +
+            """xmlns:ns2="http://www.ehealth.fgov.be/standards/kmehr/schema/v1">""" +
+            "<kmehrmessage><ns2:folder><ns2:transaction>" +
+            """<ns2:cd S="CD-TRANSACTION-MYCARENET" SV="1.0">cga</ns2:cd>""" +
+            """<ns2:author><ns2:hcparty><ns2:id S="ID-HCPARTY" SV="1.0">$authorNihii</ns2:id>""" +
+            "</ns2:hcparty></ns2:author>" +
+            "</ns2:transaction></ns2:folder></kmehrmessage></ns5:SendTransactionRequest>").toByteArray()
+
+    /**
+     * **The observed url resolves, and lands on the entry an acceptance call really returned.**
+     *
+     * Scenario 8 answered `iscomplete=false` with exactly one error — uid 51, code 156, path
+     * `/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`, `value` the author
+     * NIHII of our own request — on 26/08/2026 and again on 07/09/2026, field for field. Since
+     * `eAttestErrors.json` holds no null-path entry and code 156 carries four, only `it.path == base` can
+     * produce that, so the path this test asserts is the one the catalogue correction had to get right.
+     */
+    @Test
+    fun theUrlObservedOnAcceptanceResolvesToTheCatalogueEntry() {
+        val errors = service.errorsOf(
+            listOf(acknowledgeError(code = "156", scheme = CDERRORMYCARENETschemes.CD_ERROR, url = observedUrl)),
+            qualifiedRequest(authorNihii = "00000000000")
+        )
+
+        assertThat(errors).hasSize(1)
+        assertThat(errors.single().uid)
+            .describedAs("the entry an acceptance call returned twice for this url")
+            .isEqualTo("51")
+        assertThat(errors.single().path)
+            .isEqualTo("/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id")
+        assertThat(errors.single().value)
+            .describedAs("value is the offending node of our own request, so resolution really happened")
+            .isEqualTo("00000000000")
+    }
+
+    /**
+     * The two pure steps leave the observed url alone: it arrives agnostic, and it carries no `not(` step.
+     * So on eAttest the rewrite is a no-op — what made this location resolve is nothing this batch added,
+     * and the smoke of 07/09/2026 is a non-regression, not a repair.
+     */
+    @Test
+    fun theRewritesAreNoOpsOnTheObservedUrl() {
+        assertThat(ErrorLocationPath.namespaceAgnostic(observedUrl)).isEqualTo(observedUrl)
+        assertThat(ErrorLocationPath.resolvableSteps(observedUrl)).isEqualTo(observedUrl)
+    }
 }

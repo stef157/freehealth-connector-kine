@@ -98,7 +98,7 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
   | `GET /efact/{nihii}/fr` | 200 `[]`, empty mailbox as expected |
   | `POST /eagreement/consultList` | `SOA-01002` — expected, and **no `SOA-03004`**: the v2 message is still conformant |
   | `POST /eagreement/askAgreement` | `INVALID_DETAIL_REQUEST: processing` — MyCareNet decrypted and processed it, then refused invented FHIR content; the operation itself is authorised |
-  | **`POST /eattestv3/send/{ssin}/verbose`** | **200, signed acknowledgement**, XAdES seal of ~9.5 kB, error uid 51 / code 156 on the author NIHII — the known test-certificate limitation, not a transport failure. The `uid` is rendered by FHC only since `dd28eb602`; before it, only the bare code came back |
+  | **`POST /eattestv3/send/{ssin}/verbose`** | **200, signed acknowledgement**, XAdES seal of ~9.5 kB, error uid 51 / code 156 on the author NIHII — the known test-certificate limitation, not a transport failure. The full entry (`uid`, `path`, `value`) already came back on image `0.3.803-ef12354464`, 26/08/2026, i.e. **before** the error-rendering batch — see the eAttest paragraph below |
 
   So KMEHR building, eTEE encryption, XAdES sealing, timestamping and the MyCareNet round trip all work under Java 21
   with the new transport. Two request-shape traps met on the way, unchanged by the migration: MDA needs **`hcpSsin`**
@@ -311,20 +311,36 @@ wrong. What a caller gets for it today is Chapter4's **code-only bypass**: the c
 null, and the filter returns every entry carrying that code — one, for code 141, so the answer looks right by
 accident. Only Chapter4 and Dmg have that bypass.
 
-**Do not widen the finding to eAttest — it is measured false there.** The 101 operators are Chapter IV's own
-predicates; nothing says another domain's location is that long, and for eAttest v3 the acceptance smoke
-proves the opposite. It returned `uid 51` **alone** for code 156, while `eAttestErrors.json` carries four
-entries for that code and **no** null-path entry out of 158, and `EattestV3ServiceImpl` has no code-only
-bypass — so only `it.path == base` can have matched, i.e. the location compiled *and* resolved. The real
-eAttest url is published nowhere, so its shape is unknown and the tension `5cb8800f3` recorded stays **open**;
-the WARN branches are what will settle it. `theEattestSmokeCouldOnlyHaveComeFromAResolvedPath` pins the three
-facts so the claim cannot be re-widened by reading.
+**The eAttest url is now observed, and it resolves.** Captured from
+`mycarenetConversation.transactionResponse` on scenario 8 of the CIN physiotherapist procedure — 26/08/2026
+and again 07/09/2026, identical — the `kmehr:url` of error 156 is:
 
-Two ways to make the Chapter IV location resolve, neither done: **raise the cap** with
-`-Djdk.xml.xpathExprOpLimit=200`, a system property like the `retry.activated` one above and no code change;
-or **give the domain the Saxon factory**. The second is not the one-line change it looks like — EattestV3,
-EattestV2, Eattest and Mhm bind a `ns1` `NamespaceContext` and evaluate `ns1:cd[…]` inside their own
-`nodeDescr`, so the switch drags those along, and Saxon is XPath 2.0 in domains that are in service.
+```
+*[local-name() = 'SendTransactionRequest']/*[local-name() = 'kmehrmessage']/*[local-name() = 'folder']
+ /*[local-name() = 'transaction'][*[local-name() = 'cd'][.="cga"]]
+ /*[local-name() = 'author']/*[local-name() = 'hcparty']/*[local-name() = 'id'][@S="ID-HCPARTY"]
+```
+
+Namespace-agnostic on arrival, like the Chapter IV one — but pinning **no** `namespace-uri()`, so it stays far
+under the operator cap and `XPathFactory.newInstance()` compiles it. It resolves to the author's `id`, and both
+`ErrorLocationPath` steps are **no-ops** on it. So the tension `5cb8800f3` recorded is **closed by
+observation**: on eAttest nothing was ever broken, and the namespace rewrite `dd28eb602` added is not what
+makes this location work. `theUrlObservedOnAcceptanceResolvesToTheCatalogueEntry` and
+`theRewritesAreNoOpsOnTheObservedUrl` hold the url and a committed synthetic request carrying the three real
+namespaces (identifiers faked — a real capture carries a patient SSIN).
+
+**The 07/09/2026 smoke is a measured non-regression of the whole batch.** Same request as 26/08, replayed
+against acceptance from a container built on HEAD: HTTP 200, one error, and the error object identical
+**field for field** to the archived one — `uid 51`, `code 156`,
+`path=/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`,
+`value=99007334527` — with no `unresolved location` / `uncompilable location` / `no entry for resolved path`
+WARN in the container log, i.e. no fallback branch fired.
+
+The Chapter IV location remains uncompilable under the JDK, and that is left alone: **Chapter IV is out of
+active scope**. Raising the cap (`-Djdk.xml.xpathExprOpLimit`) or giving that domain Saxon would both work; if
+it ever matters, note that Saxon is not the one-line switch it looks like — EattestV3, EattestV2, Eattest and
+Mhm bind a `ns1` `NamespaceContext` and evaluate `ns1:cd[…]` inside their own `nodeDescr`, so the change drags
+those along, in XPath 2.0, on domains that are in service.
 
 What the audit **confirmed** rather than overturned: the official examples independently validate the
 catalogue path corrections — `kmehrResponseWithError.xml` and `mha-request-detail.xml` show `request`,
@@ -335,8 +351,9 @@ MDA's uid 5 location is observed **verbatim** in the packaging's synchronous sce
 `#text` / `@name` notations hold on both channels.
 
 Still unobserved, and labelled as such: the `not(…)` step that `resolvableSteps` handles appears in no
-published document and in neither packaging — it is inferred from the catalogues' own `regex` column
-(`not.+Issuer`), which can only match a location containing `not(`. So are attribute-step locations: the 11
+published document, in neither packaging, and **not in the two observed eAttest captures** — it is
+inferred from the catalogues' own `regex` column (`not.+Issuer`), which can only match a location
+containing `not(`. So are attribute-step locations: the 11
 `@name` entries of `MemberDataErrors.json` are catalogue *paths*, and no example shows the CIN sending one. Both fallback branches log the raw
 location at WARN (`eattestv3: error … unresolved location` / `uncompilable location`) — read those to settle
 what really arrives.

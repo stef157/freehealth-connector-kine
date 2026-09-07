@@ -372,8 +372,22 @@ the URN in the predicate surviving because it sits between quotes. `MemberDataEr
   `errors.forEach` and answered 500 with no message.
 - **`value` is empty when the location named a missing element**, since only the parent resolved. Same rule as eAttest.
 
-One gap left: a location ending in `/text()` resolves the text node, so `nodeDescr` rebuilds
-`…/NameID/#text`, which no entry carries — it lands in the fallback above rather than on uid 78.
+**A text step is written `#text`, not `text()`** — `nodeDescr` produces that (a text node has no `localName`,
+its `nodeName` is `#text`), and it is the notation `GenInsErrors.json` uses for its 21 text entries, whose paths
+are right against `ehealth-genins-core-1_1.xsd`. `MemberDataErrors.json` uid 5 `CROSSCHECK_ISSUER` was the one
+entry in the repository written `text()`, so it matched on the **async** channel — which compares the location
+textually — and never on the synchronous one. Fixed in `261cd1708`, both halves together: the entry becomes
+`#text`, and `ErrorLocationPath.resolvedTextStep` teaches the async overload the same translation, without which
+the correction would have broken the channel where the entry already worked. `resolvedTextStep` is not XPath and
+must never reach `xpath.compile`.
+
+Two things that stay as they are. § 3 of the published examples (`BO_UNKNOWN_REGNBR`) does end in `text()`, but
+its entry uid 78 sits at path `/`, which no compared path equals: it stays in the fallback on both channels. And
+a `text()` step is deliberately **not** made to fall back on the element that carries it — that would reach the
+value entries (uid 39, 40, 45, 46, all at `/AttributeQuery/Subject/NameID`) at the cost of making GenIns's 21
+correct entries unreachable. The two readings exclude each other. An **attribute** step (`…/@Format` as a step,
+not the `[@Format='…']` predicate, which is handled) has the same shape and is likewise untouched: no published
+example uses one and no catalogue is written that way.
 
 **The async channel** (`POST /mda/async/messages`) has its **own** `extractError` overload, and it works
 differently: no request document travels with an acknowledgement, so there is nothing to resolve against and the

@@ -1445,6 +1445,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val kgssSe
                     }
                     base
                 } else {
+                    log.warn("chap4: error $ec, unresolved location `$url\u00b4")
                     result.add(
                         MycarenetError(
                             code = ec,

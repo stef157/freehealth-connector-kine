@@ -1251,6 +1251,7 @@ class DmgServiceImpl(private val stsService: STSService) : DmgService {
                     }
                     base
                 } else {
+                    log.warn("dmg: error $ec, unresolved location `$url\u00b4")
                     result.add(
                         MycarenetError(
                             code = ec,

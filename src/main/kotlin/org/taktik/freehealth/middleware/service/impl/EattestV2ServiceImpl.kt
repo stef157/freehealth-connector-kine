@@ -1365,6 +1365,7 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
                     elements.forEach { it.value = textContent }
                     result.addAll(elements)
                 } else {
+                    log.warn("eattestv2: error $ec, unresolved location `$url\u00b4")
                     result.add(
                         MycarenetError(
                             code = ec,

@@ -291,4 +291,186 @@ class MemberDataErrorRenderingOfflineTest {
             .describedAs("the caller is told the location could not be compiled, and gets the reason")
             .startsWith("Erreur générique, xpath invalide : ")
     }
+
+    // ------------------------------------------------------------------ the async channel
+
+    /**
+     * The same acknowledgement errors, on the overload that has no request document to resolve against —
+     * `POST /mda/async/messages` → `getMemberDataMessages` (`MemberDataServiceImpl.kt:426`). The `Detail` is
+     * extracted there exactly as in the synchronous path, so the five published `Location` forms apply
+     * unchanged, and `FR-EXEM-MEMD-ALL … exemples de réponses.pdf` is the **async** document.
+     *
+     * With no document, the path is compared textually: stripping every `*` and `:` turns the
+     * `*:AttributeQuery / *:Subject / *:NameID` the CIN sends into the catalogue's own
+     * `/AttributeQuery/Subject/NameID`. That stands in for resolution here, and it works — which is why it
+     * is left alone.
+     *
+     * This filter is **strict** on `subCode` and `detailCode`, unlike its synchronous twin, so every fixture
+     * below passes the real values of the entry it aims at.
+     */
+    private fun async(location: String?, code1: String?, code2: String?, detailCode: String?) =
+        memberData.extractError(code1, code2, location, detailCode)
+
+    /** § 1 of the published examples: the plain `*:` form, verbatim. Unchanged by this batch. */
+    @Test
+    fun asyncRendersThePublishedNameIdLocation() {
+        val errors = async(
+            "*:AttributeQuery/*:Subject/*:NameID",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InputError",
+            "UNKNOWN_NISS_ROUTING"
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("62")
+        assertThat(errors.single().value)
+            .describedAs("no request document travels with an async acknowledgement, so there is no offending node")
+            .isNull()
+    }
+
+    /**
+     * An absent `Location` renders the warning — which the synchronous overload does **not** do, since it
+     * returns on `errorUrl?.let`. The asymmetry is on the right side and is pinned here rather than removed.
+     */
+    @Test
+    fun asyncRendersAWarningThatNamesNoNode() {
+        assertThat(
+            async(
+                null,
+                "urn:oasis:names:tc:SAML:2.0:status:Success",
+                "urn:be:cin:nippin:SAML:status:PartialAnswer",
+                "MUTATION"
+            ).map { it.uid }
+        ).containsExactly("68")
+    }
+
+    /**
+     * The strongest guard of this batch: the only `PartialAnswer` the CIN publishes
+     * (`FR-MPTI-MEMD-ALL … R9.pdf` p. 14) carries four details — one `BO_MISSING_FACET` and three
+     * `FACET_EXCEPTION` — with **no `Location`**, and **neither code exists in the catalogue**. Nothing may
+     * be rendered for them: a fallback entry here would put four
+     * "Erreur urn:oasis:names:tc:SAML:2.0:status:Success" lines on a partially *successful* answer. That is
+     * why the fallback only fires when a location was present.
+     */
+    @Test
+    fun asyncRendersNothingForAWarningTheCatalogueDoesNotKnow() {
+        listOf("BO_MISSING_FACET", "FACET_EXCEPTION").forEach { detailCode ->
+            assertThat(
+                async(
+                    null,
+                    "urn:oasis:names:tc:SAML:2.0:status:Success",
+                    "urn:be:cin:nippin:SAML:status:PartialAnswer",
+                    detailCode
+                )
+            ).describedAs(detailCode).isEmpty()
+        }
+    }
+
+    /**
+     * § 4-6 of the published examples: an **empty** `<Location/>`, which reaches the function as `""`.
+     *
+     * `"".startsWith("/")` is false, so the code prefixed it and compared against `"/"` — while the three
+     * detail codes the CIN publishes with an empty element (`IOSM_EXCEPTION`, `BO_EXCEPTION`, `NO_FACET`)
+     * are carried by entries with a **null** path. Three of the six published examples therefore rendered
+     * nothing at all here, where the synchronous channel renders uid 75.
+     */
+    @Test
+    fun asyncRendersAnEmptyLocation() {
+        assertThat(
+            async(
+                "",
+                "urn:oasis:names:tc:SAML:2.0:status:Responder",
+                "urn:be:cin:nippin:SAML:status:InternalError",
+                "IOSM_EXCEPTION"
+            ).map { it.uid }
+        ).containsExactly("75")
+    }
+
+    /**
+     * The four entries the catalogue puts at path `/` — uid 76 to 79, the back-office `BO_*` errors — are
+     * reached today by an empty location, since `""` was turned into `"/"`. Reading an empty location as
+     * "no location" must not lose them: no location at all is published for two of the four, so the
+     * evidence is absent rather than contrary, and a blank location now matches a null path **or** `/`.
+     * The two families of `detailCode` are disjoint, so nothing crosses.
+     */
+    @Test
+    fun asyncKeepsTheEntriesTheCatalogueAnchorsAtTheRoot() {
+        assertThat(
+            async(
+                "",
+                "urn:oasis:names:tc:SAML:2.0:status:Responder",
+                "urn:be:cin:nippin:SAML:status:InternalError",
+                "BO_INVALID_REGNBR"
+            ).map { it.uid }
+        ).containsExactly("77")
+    }
+
+    /**
+     * A `not(…)` step is the CIN notation for a missing element, and it has to be dropped for the path to
+     * match — that is the whole fix on this overload. The `regex` clause is added for uniformity with the
+     * ten other copies but is **inert here**, and this test is what shows why: the filter is strict on
+     * `detailCode`, and uid 13 `MISSING_ISSUER_TAG` and uid 21 `MISSING_EXTENSIONS_TAG` — which share both
+     * path and code — already differ by it. On the synchronous overload, whose filter is permissive, the
+     * same two came back as a contradictory pair.
+     */
+    @Test
+    fun asyncRendersALocationThatNamesAMissingElement() {
+        assertThat(
+            async(
+                "*:AttributeQuery/not(*:Issuer)",
+                "urn:oasis:names:tc:SAML:2.0:status:Requester",
+                "urn:be:cin:nippin:SAML:status:AttributeQueryError",
+                "MISSING_ISSUER_TAG"
+            ).map { it.uid }
+        ).containsExactly("13")
+
+        assertThat(
+            async(
+                "*:AttributeQuery/not(*:Extensions)",
+                "urn:oasis:names:tc:SAML:2.0:status:Requester",
+                "urn:be:cin:nippin:SAML:status:AttributeQueryError",
+                "MISSING_EXTENSIONS_TAG"
+            ).map { it.uid }
+        ).containsExactly("21")
+    }
+
+    /**
+     * § 2 and § 3 of the published examples land on entries the catalogue anchors at `/`, which a compared
+     * path never equals — so both errors used to vanish entirely. They now come back as one entry carrying
+     * the code and the `detailCode`, the shape `f95492b2a` gave the synchronous channel.
+     */
+    @Test
+    fun asyncDoesNotLoseAnErrorWhosePathMatchesNoEntry() {
+        val invalidRegNbr = async(
+            "*:AttributeQuery/*:Subject/*:NameID[@Format='urn:be:cin:nippin:member:ssin@mut']",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InternalError",
+            "BO_INVALID_REGNBR"
+        )
+        assertThat(invalidRegNbr).hasSize(1)
+        assertThat(invalidRegNbr.single().uid).isNull()
+        assertThat(invalidRegNbr.single().detailCode).isEqualTo("BO_INVALID_REGNBR")
+
+        val unknownRegNbr = async(
+            "/*:AttributeQuery/*:Subject/*:NameID/text()",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InternalError",
+            "BO_UNKNOWN_REGNBR"
+        )
+        assertThat(unknownRegNbr).hasSize(1)
+        assertThat(unknownRegNbr.single().detailCode).isEqualTo("BO_UNKNOWN_REGNBR")
+    }
+
+    /** The catalogue is a set of templates on this overload too: it handed back its own entries. */
+    @Test
+    fun asyncDoesNotHandBackTheSharedCatalogueEntry() {
+        fun once() = async(
+            "*:AttributeQuery/*:Subject/*:NameID",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InputError",
+            "UNKNOWN_NISS_ROUTING"
+        ).single()
+
+        assertThat(once()).isNotSameAs(once())
+        assertThat(once().uid).isEqualTo("62")
+    }
 }

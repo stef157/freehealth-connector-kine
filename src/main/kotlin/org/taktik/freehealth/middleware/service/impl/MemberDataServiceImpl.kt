@@ -972,13 +972,58 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         } ?: setOf()
     }
 
-    private fun extractError(code1: String?, code2: String?, errorUrl: String?, detailCode: String?): Set<MycarenetError> {
+    internal fun extractError(code1: String?, code2: String?, errorUrl: String?, detailCode: String?): Set<MycarenetError> {
         val result = mutableSetOf<MycarenetError>()
-        var url = errorUrl?.replace("(\\*|:)".toRegex(), "")
-        if(url?.startsWith("/") == false)
-            url = "/$url"
 
-        result.addAll(MemberDataErrors.values.filter {it.path == url &&  it.code == code1 && it.subCode == code2 && it.detailCode == detailCode })
+        // No request document travels with an async acknowledgement, so there is nothing to resolve the
+        // location against: the path is compared textually, and stripping every `*` and `:` is what stands
+        // in for resolution. It works on the form the CIN sends — `*:AttributeQuery/*:Subject/*:NameID`
+        // becomes exactly the catalogue's `/AttributeQuery/Subject/NameID`.
+        val curratedUrl = errorUrl
+            ?.takeIf { it.isNotBlank() }
+            ?.let { if (it.startsWith("/")) it else "/$it" }
+
+        val elements = if (curratedUrl == null) {
+            // An absent or empty `<Location/>` designates nothing. The catalogue writes that either as a
+            // null path — `IOSM_EXCEPTION`, `BO_EXCEPTION`, `NO_FACET`, and the `PartialAnswer` warnings —
+            // or as `/`, where it puts the four back-office errors. Both are meant, and the strict
+            // `detailCode` keeps them apart: the two families share none.
+            MemberDataErrors.values.filter {
+                (it.path == null || it.path == "/") && it.code == code1 && it.subCode == code2 &&
+                    it.detailCode == detailCode
+            }
+        } else {
+            // A `not(…)` step names a missing element: it has to go for the path to match, and to stay for
+            // the `regex` to match. The clause is inert on this overload — the strict `detailCode` already
+            // separates the eight entries that carry a pattern — and is here for uniformity with the ten
+            // other copies of this matching.
+            val path = ErrorLocationPath.resolvableSteps(curratedUrl).replace("(\\*|:)".toRegex(), "")
+            MemberDataErrors.values.filter {
+                it.path == path && it.code == code1 && it.subCode == code2 && it.detailCode == detailCode &&
+                    (it.regex == null || curratedUrl.matches(Regex(".*" + it.regex + ".*")))
+            }
+        }
+
+        if (elements.isNotEmpty()) {
+            // `value` stays null: there is no request here to take the offending node from.
+            result.addAll(elements.map { ErrorLocationPath.renderedFor(it, null) })
+        } else if (curratedUrl != null) {
+            // An error that named a node must not vanish, which is what the CIN's own § 2 and § 3 examples
+            // did: both point at entries the catalogue anchors at `/`, which a compared path never equals.
+            // A detail with no location and no entry is left alone on purpose — the whole `FaultType`,
+            // `detailCode` and `Message` included, is returned beside this rendered view.
+            log.warn("mda async: error $code1/$detailCode, no entry for path `$curratedUrl\u00b4")
+            result.add(
+                MycarenetError(
+                    code = code1,
+                    subCode = code2,
+                    detailCode = detailCode,
+                    path = curratedUrl,
+                    msgFr = "Erreur $code1" + (detailCode?.let { c -> " ($c)" } ?: ""),
+                    msgNl = "Fout $code1" + (detailCode?.let { c -> " ($c)" } ?: "")
+                )
+            )
+        }
 
         return result
     }

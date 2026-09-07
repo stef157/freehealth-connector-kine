@@ -51,6 +51,29 @@ introduced.
 The project version is `gitVersion ?: "0.0.1-SNAPSHOT"`, where `gitVersion` is a Gradle property the CI passes
 (`-PgitVersion=…`); the old `git-version` plugin and its `fatal: not a git repository` noise are gone.
 
+When no `-PgitVersion` is passed, `build.gradle.kts` computes it itself: `0.3.<commits since the 0.3.0 tag>-<sha10>`,
+plus `-dirty` if the tree has uncommitted changes. Measured on the image that is in service:
+`git rev-list --count 0.3.0..cf7cb2d7b` = **863** and `git rev-parse cf7cb2d7b | cut -c1-10` = **cf7cb2d7b9**, hence
+`0.3.863-cf7cb2d7b9`. `n` counts **all** merged history, upstream included, so it dates a build but names nobody's
+work; **only the `<sha10>` designates code**, and a `-dirty` tag must never be deployed.
+
+**How the image in service was produced and how it reached its host** — the only deployment chain the connector has.
+The local half is measured (02/09/2026, this repo, arm64 Mac):
+
+| step | what happened |
+|---|---|
+| build | `./gradlew dockerize` with a clean tree, so no `-PgitVersion` and no `-dirty` — `bootJar` wrote `build/libs/freehealth-connector-0.3.863-cf7cb2d7b9.jar` (247 573 578 B) at **21:46**, and `docker build` on this repo's own `Dockerfile` tagged the image the same minute (`Created=2026-09-02T19:46:59Z`) |
+| image | `eclipse-temurin:21-jre`, **arm64 native**, 588 MB, `COPY <jar> /app/fhc.jar`, `VOLUME [/opt/ehealth,/tmp]`, shell entrypoint `sh -c exec java $JAVA_OPTS -jar /app/fhc.jar` — the shell is what lets the CIN licence and `package.name` travel through `JAVA_OPTS` |
+| transport to the local host | **none**. `docker image inspect … --format '{{.RepoDigests}}'` is **empty**, which is only true of an image that was neither pushed nor pulled: `docker.taktik.be/icure/…` is a tag string here, not a registry it transited. The Docker daemon that built it is the one that runs it |
+| run | not `docker run`, but Compose — `docker compose -f deploy/fhc/docker-compose.yml up -d` from the **kine-data** repo (the container's own labels name that file). The container in service was created **07/09/2026 13:17** from the 02/09 image, `restart: unless-stopped`, published on `127.0.0.1:8090` only, with `fhc-ehealth` and `fhc-tmp` as external named volumes |
+
+`dockerPush` exists and would push that tag to `docker.taktik.be`, and it has never been used for this image.
+**The production host is a separate question this repo cannot answer**: a read-only `docker ps` there on 06/09/2026
+showed the *same* tag running, yet no document records a `docker save`/`load`, a `push`/`pull`, or a build on that
+machine — and the fork is reported absent from it. So how the image got there is **not established**; the two
+candidates are an offline `docker save | ssh … docker load` and an authenticated pull. `RepoDigests` on that host
+settles it in one command. Do not write down either hypothesis as the chain.
+
 API docs are served by **springdoc** (OpenAPI 3): UI at `/swagger-ui.html`, descriptor at `/v3/api-docs`. SpringFox and
 its `/api/index.html` / `/v2/api-docs` are gone.
 
@@ -732,4 +755,10 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   (a bare `@ApiParam` publishing a mandatory `@RequestHeader` as optional) is gone;
   `AddressbookControllerOfflineTest.searchHcpIsExposedInSwagger` asserts exactly that on `/v3/api-docs`.
   Every controller carries a `@Tag` now, and the descriptor no longer filters paths through a regex.
+- **Never a real SSIN or NIHII in a fixture.** This fork is public, so a test that carries one publishes it, and
+  git history keeps it after the file is fixed — measured on 07/09/2026, when the bearer's national register number
+  (written as `patientSsin`) and a practitioner's real NIHII had to be taken back out of three test files that were
+  already pushed. Use synthetic values, and **a distinct one per node** — `11111111111`, `22222222222`,
+  `12345678901`, `00000000000` are the ones in use: an assertion that compares `value` to a fixture cannot then pass
+  by resolving the wrong node. The same rule covers this file and every report: name the role, not the number.
 - Licensed under AGPL v3; keep the existing file headers.

@@ -85,6 +85,57 @@ class MemberDataErrorRenderingOfflineTest {
     // ------------------------------------------------------------------ the defect
 
     /**
+     * That a location resolves at all.
+     *
+     * The `AttributeQuery` MDA sends is namespace-qualified and serialised with prefixes —
+     * `<ns3:AttributeQuery>`, `<ns6:Subject>`. `extractError` parsed it with
+     * `isNamespaceAware = false`, which leaves `localName` null and makes every DOM node answer to its
+     * prefixed `nodeName`, so an unprefixed location like `/AttributeQuery` matched nothing. **No MDA
+     * location resolved, ever**: every error and every warning came back as the fallback entry, `uid` null,
+     * "Erreur générique, xpath invalide".
+     *
+     * These are the two warnings a real MDA call returns, uid 68 `MUTATION` and uid 96
+     * `ONLY_FIVE_PERIODS_RETURNED` (`Success` / `PartialAnswer`). They carry no `path`, so reaching them
+     * needed nothing but a nodeset — which is exactly what was missing.
+     */
+    @Test
+    fun theSuccessWarningsAreRendered() {
+        fun warning(detailCode: String) = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Success",
+            "urn:be:cin:nippin:SAML:status:PartialAnswer",
+            "/AttributeQuery",
+            detailCode
+        )
+
+        assertThat(warning("MUTATION").map { it.uid }).containsExactly("68")
+        assertThat(warning("MUTATION").single().msgFr).isEqualTo("Il y une mutation durant la période")
+        assertThat(warning("ONLY_FIVE_PERIODS_RETURNED").map { it.uid }).containsExactly("96")
+    }
+
+    /**
+     * A deep location, and the predicate-stripping fallback that goes with it.
+     *
+     * `nodeDescr` writes a node as `localName[idAttribute]`, so the `base` rebuilt from the first `Facet` is
+     * `/AttributeQuery/Extensions/Facet[urn:be:cin:nippin:insurability]` while the catalogue entry says
+     * `/AttributeQuery/Extensions/Facet`. The second filter strips the predicates and matches — a branch
+     * that had never run.
+     */
+    @Test
+    fun aFacetLocationReachesTheFacetEntry() {
+        val errors = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            null,
+            "/AttributeQuery/Extensions/Facet",
+            "UNKNOWN_FACET"
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("23")
+        assertThat(errors.single().path).isEqualTo("/AttributeQuery/Extensions/Facet")
+    }
+
+    /**
      * A location the CIN writes in its own notation must not take the response down.
      *
      * `MemberDataErrors.json` indexes nine of its own entries as

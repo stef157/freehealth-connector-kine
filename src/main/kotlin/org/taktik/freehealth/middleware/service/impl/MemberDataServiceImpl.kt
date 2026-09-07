@@ -122,10 +122,8 @@ import java.net.URI
 import java.time.Instant
 import java.util.*
 import javax.xml.datatype.XMLGregorianCalendar
-import javax.xml.namespace.NamespaceContext
 import javax.xml.parsers.DocumentBuilderFactory
 import jakarta.xml.ws.soap.SOAPFaultException
-import javax.xml.xpath.XPath
 import javax.xml.xpath.XPathConstants
 
 @Service
@@ -881,15 +879,21 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         //For some reason... The path starts with ../../../../ which corresponds to the request
         return errorUrl?.let { url ->
             val factory = DocumentBuilderFactory.newInstance()
-            factory.isNamespaceAware = false
+            factory.isNamespaceAware = true
             val builder = factory.newDocumentBuilder()
 
             val curratedUrl = if (url.startsWith("/")) url else "/$url"
+
+            // A `not(…)` step names a missing element; only its parent can be resolved. `value` then has to
+            // stay empty: the parent holds the SSIN, the dates and the whole facet list, which is neither the
+            // offending value nor ours to hand back.
+            val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
             val result = mutableSetOf<MycarenetError>()
 
             val nodes = runCatching {
-                val xpath = xPathFactory()
-                val expr = xpath.compile(curratedUrl)
+                val xpath = xPathfactory.newXPath()
+                val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
                 expr.evaluate(
                     builder.parse(ByteArrayInputStream(sendTransactionRequest)),
                     XPathConstants.NODESET
@@ -915,7 +919,9 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
             nodes?.let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
-                    val textContent = if (node.hasChildNodes() && node.childNodes.length > 1) ConnectorXmlUtils.toString(node) else node.textContent
+                    val textContent = if (namesAMissingElement) null
+                    else if (node.hasChildNodes() && node.childNodes.length > 1) ConnectorXmlUtils.toString(node)
+                    else node.textContent
                     var base = "/" + nodeDescr(node)
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"
@@ -981,24 +987,6 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         return if (id != null) "$localName[$id]" else localName
     }
 
-    private fun xPathFactory(): XPath {
-        val xpath = xPathfactory.newXPath()
-        xpath.namespaceContext = object : NamespaceContext {
-            override fun getNamespaceURI(prefix: String?) = when (prefix) {
-                else -> null
-            }
-
-            override fun getPrefix(namespaceURI: String?) = when (namespaceURI) {
-                else -> null
-            }
-
-            override fun getPrefixes(namespaceURI: String?): Iterator<String> =
-                when (namespaceURI) {
-                    else -> listOf<String>().iterator()
-                }
-        }
-        return xpath
-    }
 }
 
 private fun Element.getElementsByTagNameWithOrWithoutNs(ns: String, name: String): NodeList {

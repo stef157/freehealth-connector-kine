@@ -304,9 +304,11 @@ class MemberDataErrorRenderingOfflineTest {
     /**
      * `CROSSCHECK_ISSUER` — uid 5, the one entry of this catalogue that names a text node.
      *
-     * It matters here: it is MyCareNet comparing the `AttributeQuery/Issuer` NIHII with the one in the
-     * gen(A)Sync `CommonInput`, and CLAUDE.md records the token advertising `…501` where the address book
-     * returns `…527` for the same person.
+     * It is MyCareNet comparing the `AttributeQuery/Issuer` NIHII with the one in the gen(A)Sync
+     * `CommonInput`. FHC fills both from the same `hcpNihii` parameter (`getAttrQuery` and
+     * `MemberDataServiceImpl:640`/`:653`), so it cannot desynchronise them on its own — tying this error to
+     * the token/address-book mismatch CLAUDE.md records (`…501` vs `…527`) would be an inference, and
+     * nothing establishes it.
      *
      * `nodeDescr` writes a resolved text node `#text`, which is the notation `GenInsErrors.json` uses for
      * its 21 text entries (see `ErrorCatalogueReachabilityTest`). uid 5 was written `text()` instead, so it

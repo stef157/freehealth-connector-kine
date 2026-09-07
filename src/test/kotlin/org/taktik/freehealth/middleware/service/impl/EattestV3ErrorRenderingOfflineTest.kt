@@ -20,10 +20,15 @@
 
 package org.taktik.freehealth.middleware.service.impl
 
+import be.fgov.ehealth.messageservices.mycarenet.core.v1.RequestType
+import be.fgov.ehealth.messageservices.mycarenet.core.v1.SendTransactionRequest
 import be.fgov.ehealth.standards.kmehr.mycarenet.cd.v1.CDERRORMYCARENET
 import be.fgov.ehealth.standards.kmehr.mycarenet.cd.v1.CDERRORMYCARENETschemes
 import be.fgov.ehealth.standards.kmehr.mycarenet.dt.v1.TextType
+import be.fgov.ehealth.standards.kmehr.mycarenet.id.v1.IDKMEHR
+import be.fgov.ehealth.standards.kmehr.mycarenet.id.v1.IDKMEHRschemes
 import be.fgov.ehealth.standards.kmehr.mycarenet.schema.v1.ErrorMyCarenetType
+import org.taktik.connector.business.recipeprojects.core.utils.MarshallerHelper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -174,5 +179,54 @@ class EattestV3ErrorRenderingOfflineTest {
     fun anAcknowledgementWithoutErrorsRendersNone() {
         assertThat(service.errorsOf(null, request())).isEmpty()
         assertThat(service.errorsOf(listOf(), request())).isEmpty()
+    }
+    /**
+     * What the catalogue is worth on a real request, measured — and today the answer is nothing.
+     *
+     * `extractError` resolves the error url with a plain `XPath` carrying no `NamespaceContext`, while the request
+     * it resolves against is the one the two call sites actually send: `MarshallerHelper(SendTransactionRequest…)`
+     * marshals it namespace-qualified (`elementFormDefault = QUALIFIED`), the root under
+     * `messageservices/protocol/v1` and its children under `messageservices/core/v1`. The catalogue's paths are
+     * unprefixed, an unprefixed XPath name test matches only names in no namespace, so the nodeset comes back
+     * empty and every error takes the "xpath invalide" branch: the code survives, but `uid`, `value` and the
+     * catalogue's own 158 messages never do.
+     *
+     * This pins a defect, not a wanted behaviour. It is the measurement behind the note in f1e1df793, and it
+     * should go red the day the resolution is made namespace-aware — that is the point of it.
+     */
+    @Test
+    fun theCatalogueIsNotConsultedOnARealMarshalledRequest() {
+        val request = SendTransactionRequest().apply {
+            this.request = RequestType().apply {
+                id = IDKMEHR().apply {
+                    s = IDKMEHRschemes.ID_KMEHR
+                    sv = "1.0"
+                    value = "00000000000.20260907120000"
+                }
+            }
+        }
+        val marshalled = MarshallerHelper(SendTransactionRequest::class.java, SendTransactionRequest::class.java)
+            .toXMLByteArray(request)
+
+        assertThat(String(marshalled))
+            .describedAs("the request the call sites send is namespace-qualified")
+            .contains("""xmlns="http://www.ehealth.fgov.be/messageservices/core/v1"""")
+
+        // uid 1 of the catalogue: path /SendTransactionRequest/request/id, code 111 — the pair this request holds.
+        val error = service.errorsOf(
+            listOf(
+                acknowledgeError(
+                    code = "111",
+                    scheme = CDERRORMYCARENETschemes.CD_ERROR,
+                    url = "/SendTransactionRequest/request/id"
+                )
+            ),
+            marshalled
+        ).single()
+
+        assertThat(error.code).describedAs("the code always survives").isEqualTo("111")
+        assertThat(error.msgFr).isEqualTo("Erreur générique, xpath invalide")
+        assertThat(error.uid).describedAs("no catalogue entry was reached").isNull()
+        assertThat(error.value).describedAs("nor the offending node").isNull()
     }
 }

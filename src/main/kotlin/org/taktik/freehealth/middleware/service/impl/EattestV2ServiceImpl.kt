@@ -1376,6 +1376,7 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
                 }
             }
             } catch(e:Exception) {
+                log.warn("eattestv2: error $ec, uncompilable location `$url\u00b4", e)
                 result.add(
                     MycarenetError(
                         code = ec,

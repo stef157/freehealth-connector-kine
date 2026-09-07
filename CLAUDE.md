@@ -86,8 +86,9 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
   postdate the test baseline `MIGRATION_TO_SPRING_3_5_5.md` reports. Only a real acceptance call exercises it, sealing
   and timestamping included. The earlier SAAJ 3.0.4 upgrade already broke that path once with `WRONG_DOCUMENT_ERR`.
   **It was exercised, and it holds** — smokes run 31/08/2026 against acceptance from the container, with the CIN
-  licence and `-Dpackage.name=Kine-Desk`, on certificate `SSIN=12345678901` (token: NIHII `99007334527`,
-  physiotherapist):
+  licence and `-Dpackage.name=Kine-Desk`, on the acceptance test certificate (token: NIHII `99007334527`,
+  physiotherapist — a `99…` platform test number, not a practitioner's; the bearer's SSIN is deliberately
+  not written here):
 
   | call | result |
   |---|---|
@@ -234,7 +235,7 @@ Spring-side config is `src/main/resources/application.properties` (port 8090, `s
 ### MyCareNet / CIN licence
 
 Every MyCareNet domain needs a CIN licence (a username + password pair). Services resolve it in this order
-(`Chapter4ServiceImpl.kt:203`, same shape in Dmg / Tarification / Eattest / Mhm):
+(`Chapter4ServiceImpl.kt:190`, same shape in Dmg / Tarification / Eattest / Mhm):
 
 ```kotlin
 username = principal?.mcnLicense ?: config.getProperty("mycarenet.license.username")
@@ -273,7 +274,7 @@ Hard-won details:
 - The `date` **query parameter** is `yyyyMMddHHmmss` (14 digits), unlike `date` inside each `Eattest.EattestCode`,
   which is `yyyyMMdd`. Passing 8 digits fails with `Value 0 for monthOfYear must be in the range [1,12]`.
 - **Prefer omitting `date` entirely.** The KMEHR `request/id` is `<nihii>.<refDateTime>` where
-  `refDateTime = dateTime(date) ?: now` (`EattestV3ServiceImpl.kt:602`), while `CommonInput.inputReference` is always
+  `refDateTime = dateTime(date) ?: now` (`EattestV3ServiceImpl.kt:167`), while `CommonInput.inputReference` is always
   `now` on the server clock (`InputReference()`). Supplying a `date` from another clock/timezone desynchronises them and
   MyCareNet answers `/SendTransactionRequest/request/id — La valeur de l'identification de la requête est incohérente
   avec celle du Web Service`.
@@ -360,7 +361,7 @@ what really arrives.
 
 ### Calling MDA (Member Data)
 
-`GET /mda/{ssin}` requests four default facets (`MemberDataServiceImpl.kt:815`), including
+`GET /mda/{ssin}` requests four default facets (`MemberDataServiceImpl.kt:814`), including
 `urn:be:cin:nippin:referencePharmacy` — which a physiotherapist is **not authorised to read**. The call then fails with
 a SAML `AttributeQueryError` / `UNAUTHORIZED_FACET`. Use `POST /mda/{ssin}` instead and pass only the facets the
 profession may read; for insurability that is:
@@ -418,7 +419,7 @@ the URN in the predicate surviving because it sits between quotes. `MemberDataEr
   `Location`**, which returns on `errorUrl?.let`. So uid 68 `MUTATION` and uid 96 `ONLY_FIVE_PERIODS_RETURNED` were
   not rendered before and are not rendered now. Should MyCareNet ever send one with a location, it will now come back
   as its real entry instead of the generic one — and `value` would then hold the **whole serialised
-  `AttributeQuery`**, SSIN included (`:897`, `childNodes.length > 1`), which is a reason not to show `value` blindly.
+  `AttributeQuery`**, SSIN included (`:924`, `childNodes.length > 1`), which is a reason not to show `value` blindly.
 - **An error whose resolved path matches no entry used to vanish.** The CIN puts `BO_INVALID_REGNBR` and
   `BO_UNKNOWN_REGNBR` at path `/`, which a rebuilt `base` never equals, and MDA was the one copy with no "nothing
   matched" branch, so the error returned an empty set. `f95492b2a` calls that a consequence of the resolution work;
@@ -494,7 +495,7 @@ are honoured whether the facets come from the body or from the defaults: `getAtt
 (`MemberDataServiceImpl.kt:862-872`) — the XPath the catalogue indexes uid 53 to 59 on. There is no facet `Dimension`
 for the period.
 
-The trap is the unit. `MemberDataController.kt:71` does `Instant.ofEpochMilli(date)`, on all six MDA routes — while
+The trap is the unit. `MemberDataController.kt:78` does `Instant.ofEpochMilli(date)`, on all six MDA routes — while
 eAttest v3 takes `yyyyMMddHHmmss` and `MapperConfiguration` serializes JSON dates as `yyyyMMdd` numbers. So a
 `yyyyMMdd` value lands ~20 million ms after the epoch, i.e. **1970-01-01**: `date=20210101` returns
 `PERIOD_TOO_FAR_IN_PAST` (uid 59, *"Request more than 5 years in the past"*) and `date=20260801&endDate=20260831` asks
@@ -578,8 +579,8 @@ way to validate an `InvoicesBatch` before sending it. Two fields are dereference
 mandatory although the DTO types them nullable, each costing a bare `KotlinNullPointerException` (HTTP 500, no
 message):
 
-- `sender.phoneNumber` (`BelgianInsuranceInvoicingFormatWriter.kt:140`)
-- `invoice.reason` — an `InvoicingTreatmentReasonCode`, use `"Other"` for ordinary care (`EfactServiceImpl.kt:155`)
+- `sender.phoneNumber` (`BelgianInsuranceInvoicingFormatWriter.kt:154`)
+- `invoice.reason` — an `InvoicingTreatmentReasonCode`, use `"Other"` for ordinary care (`EfactServiceImpl.kt:165`)
 
 `isTest = true` stamps field 304 with `9991999` instead of `1999`, which is how the OA tells a test batch apart.
 
@@ -680,8 +681,8 @@ Only these domains are in use: **eAttest**, **eAgreement**, **eFact**, and **MDA
 
 End users are **physiotherapists**, so every call needs `quality=physiotherapist` — both when requesting the token
 (`/sts/token/physiotherapist`) and as `hcpQuality` on the business call. Two silent fallbacks make a missing or
-misspelled value degrade into a *doctor* request instead of an error: `EattestV3ServiceImpl.kt:345`
-(`hcpQuality ?: … ?: "doctor"`) and `getRequestAuthorCdHcParty` (line 1578, unknown quality → `persphysician`).
+misspelled value degrade into a *doctor* request instead of an error: `EattestV3ServiceImpl.kt:347`
+(`hcpQuality ?: … ?: "doctor"`) and `getRequestAuthorCdHcParty` (line 1609, unknown quality → `persphysician`).
 eFact is the exception: it carries no `hcpQuality`, the profession is encoded in `InvoiceSender.professionCode` /
 `nihii` in the batch payload. Prioritise accordingly — a change touching `/eattest*`, `/eagreement`,
 `/efact` or `/mda` is load-bearing; the other controllers are not exercised today.

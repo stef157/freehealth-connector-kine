@@ -1345,6 +1345,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
                     }
                 }
             } catch (e: Exception) {
+                log.warn("mhm: error $ec, uncompilable location `$url\u00b4", e)
                 result.add(
                     MycarenetError(
                         code = ec,

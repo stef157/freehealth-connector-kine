@@ -135,6 +135,72 @@ class MemberDataErrorRenderingOfflineTest {
         assertThat(errors.single().path).isEqualTo("/AttributeQuery/Extensions/Facet")
     }
 
+    // ------------------------------------------------------------------ the documented locations
+
+    /**
+     * The five `Location` values the CIN itself publishes, from
+     * `Sharepoint/Member Data/level 4/FR-EXEM-MEMD-ALL Données du membre Async - exemples de réponses.pdf`
+     * (April 2021) — the only observed shapes there are, and none of them was guessed here:
+     *
+     * Separators are spaced out below only because Kotlin nests block comments and a bare slash-star would
+     * open one; the values in the test body are verbatim.
+     *
+     * | § | detailCode | Location |
+     * |---|---|---|
+     * | 1 | `UNKNOWN_NISS_ROUTING` | `*:AttributeQuery / *:Subject / *:NameID` |
+     * | 2 | `BO_INVALID_REGNBR` | the same, plus `[@Format='urn:be:cin:nippin:member:ssin@mut']` |
+     * | 3 | `BO_UNKNOWN_REGNBR` | the same, leading separator included, ending in ` / text()` |
+     * | 4-6 | `IOSM_EXCEPTION`, `BO_EXCEPTION`, `NO_FACET` | empty element |
+     *
+     * So the form is `*:name` — prefixed with the wildcard namespace, sometimes without a leading slash,
+     * sometimes with an attribute predicate, sometimes ending in `text()`. That is exactly what
+     * `ErrorLocationPath.namespaceAgnostic` rewrites, and the URN inside the predicate survives because it
+     * sits between quotes, which the rewrite copies verbatim.
+     */
+    @Test
+    fun theLocationsTheCinPublishesAllRender() {
+        fun at(location: String, code1: String, code2: String?, detailCode: String) =
+            memberData.extractError(attributeQuery, code1, code2, location, detailCode)
+
+        // § 1 — the plain `*:` form, no leading slash. uid 62.
+        val routing = at(
+            "*:AttributeQuery/*:Subject/*:NameID",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InputError",
+            "UNKNOWN_NISS_ROUTING"
+        )
+        assertThat(routing.map { it.uid }).containsExactly("62")
+        assertThat(routing.single().value)
+            .describedAs("the offending node of our own request — the member's SSIN")
+            .isEqualTo("12345678901")
+
+        // § 2 — an attribute predicate holding a URN, between quotes.
+        val invalidRegNbr = at(
+            "*:AttributeQuery/*:Subject/*:NameID[@Format='urn:be:cin:nippin:member:ssin@mut']",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InternalError",
+            "BO_INVALID_REGNBR"
+        )
+        assertThat(invalidRegNbr)
+            .describedAs("the catalogue puts uid 77 at path `/`, which no rebuilt base equals — but the error must still be reported")
+            .hasSize(1)
+        assertThat(invalidRegNbr.single().code).isEqualTo("urn:oasis:names:tc:SAML:2.0:status:Responder")
+
+        // § 3 — a `text()` step. The rebuilt base ends `/#text`, which the catalogue does not carry either.
+        val unknownRegNbr = at(
+            "/*:AttributeQuery/*:Subject/*:NameID/text()",
+            "urn:oasis:names:tc:SAML:2.0:status:Responder",
+            "urn:be:cin:nippin:SAML:status:InternalError",
+            "BO_UNKNOWN_REGNBR"
+        )
+        assertThat(unknownRegNbr).hasSize(1)
+
+        // § 4-6 — an empty `<Location/>` reaches the function as "", not null.
+        assertThat(at("", "urn:oasis:names:tc:SAML:2.0:status:Responder", null, "IOSM_EXCEPTION").map { it.uid })
+            .describedAs("an empty location designates nothing, and uid 75 carries no path either")
+            .containsExactly("75")
+    }
+
     /**
      * Eight entries of this catalogue are told apart by their `regex` alone, and MDA never read it.
      *
@@ -191,16 +257,18 @@ class MemberDataErrorRenderingOfflineTest {
     }
 
     /**
-     * A location the CIN writes in its own notation must not take the response down.
+     * A location that cannot be compiled must not take the response down.
      *
-     * `MemberDataErrors.json` indexes nine of its own entries as
-     * `…/Facet[urn:be:cin:nippin:insurability]/Dimension[requestType]` — a bare URN inside a predicate,
-     * which is `nodeDescr`'s notation and not an XPath expression. Compiling it raises
-     * `Namespace prefix 'urn' has not been declared`, and MDA was one of the four copies of `extractError`
-     * with no try/catch: the exception left the function, through `errors.forEach` in the response builder,
-     * and failed the whole call. An error MyCareNet reported precisely became a 500 with no message.
+     * The five locations the CIN publishes are all compilable (see above), so this is uniformity rather than
+     * an observed failure: MDA was one of four copies of `extractError` with no try/catch, and there any
+     * `XPathExpressionException` left the function, travelled through `errors.forEach` in the response
+     * builder, and failed the whole call — an error MyCareNet had reported precisely came back as a 500 with
+     * no message. Six of the ten copies already caught it.
      *
-     * Measured on the original code: `XPathExpressionException` out of `extractError`.
+     * The location used here is the one form known to raise: a bare URN inside a predicate, which is how
+     * `MemberDataErrors.json` indexes nine of its own entries (`nodeDescr`'s notation, not XPath).
+     * `Namespace prefix 'urn' has not been declared` — measured on the original code as an exception out of
+     * `extractError`. Whether MyCareNet ever sends a location in that notation is **not** established.
      */
     @Test
     fun aLocationThatIsNotAnXPathDoesNotTakeTheResponseDown() {

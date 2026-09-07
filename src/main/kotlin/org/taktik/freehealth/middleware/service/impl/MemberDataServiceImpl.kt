@@ -936,7 +936,26 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                             MemberDataErrors.values.filter { (it.path == null || it.path == oBase) && it.code == code1 && (code2 == null || it.subCode == code2) && (detailCode == null || it.detailCode == detailCode) && (it.regex == null || curratedUrl.matches(Regex(".*" + it.regex + ".*"))) }
                     }
 
-                    result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
+                    if (elements.isNotEmpty()) {
+                        result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
+                    } else {
+                        // No catalogue entry describes it. The nine other copies still hand back the code
+                        // rather than nothing, and so must this one: the CIN's own published examples put
+                        // `BO_INVALID_REGNBR` and `BO_UNKNOWN_REGNBR` at path `/`, which no rebuilt base ever
+                        // equals, so those two errors used to vanish entirely once the location resolved.
+                        log.warn("mda: error $code1/$detailCode, no entry for resolved path `$base\u00b4")
+                        result.add(
+                            MycarenetError(
+                                code = code1,
+                                subCode = code2,
+                                detailCode = detailCode,
+                                path = base,
+                                value = textContent,
+                                msgFr = "Erreur $code1" + (detailCode?.let { c -> " ($c)" } ?: ""),
+                                msgNl = "Fout $code1" + (detailCode?.let { c -> " ($c)" } ?: "")
+                            )
+                        )
+                    }
                 } else {
                     result.add(
                         MycarenetError(

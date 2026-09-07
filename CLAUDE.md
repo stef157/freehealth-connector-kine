@@ -336,20 +336,30 @@ Two traps when reading an MDA failure:
 with `isNamespaceAware = false`, which leaves `localName` null and makes every node answer only to its prefixed
 `nodeName` — so `/AttributeQuery` matched nothing. Three consequences to know:
 
-- **`myCarenetErrors` changed shape on calls that already worked.** A `Success` / `PartialAnswer` answer carrying uid 68
-  `MUTATION` or uid 96 `ONLY_FIVE_PERIODS_RETURNED` now returns that entry with its `uid`, `path` and `msgFr` instead
-  of the generic one. A `Success` with no `statusDetail` never entered the function and is untouched, as is a detail
-  with no `Location`.
-- **A location that is not an XPath used to fail the whole call** (`6dadc3fc8`). The CIN's own facet notation —
-  a bare URN inside a predicate, exactly the `path` form above — raises `Namespace prefix 'urn' has not been declared`,
-  and MDA was one of four copies of `extractError` with no try/catch, so the exception travelled up through
-  `errors.forEach` and answered 500 with no message. It now degrades to one entry naming the location and the reason.
-- **`value` is empty when the location named a missing element**, since only the parent resolved and its content is the
-  whole facet list. Same rule as eAttest.
+**The `Location` shapes are documented, not guessed** — `FR-EXEM-MEMD-ALL Données du membre Async - exemples de
+réponses.pdf` (April 2021) publishes five, and they are the only observed ones: `*:AttributeQuery/*:Subject/*:NameID`
+(`UNKNOWN_NISS_ROUTING`), the same plus `[@Format='urn:be:cin:nippin:member:ssin@mut']` (`BO_INVALID_REGNBR`), the same
+again with a leading slash and a trailing `text()` (`BO_UNKNOWN_REGNBR`), and an **empty** element for
+`IOSM_EXCEPTION` / `BO_EXCEPTION` / `NO_FACET`. So the form is `*:name` — which is exactly what the rewrite handles,
+the URN in the predicate surviving because it sits between quotes. `MemberDataErrorRenderingOfflineTest` runs all five.
 
-`MemberDataErrorRenderingOfflineTest` measures all of it offline, on the very `AttributeQuery` the service marshals.
-What is still not measured is the real shape of the `url` MyCareNet sends: no captured MDA acknowledgement error exists
-in the repository. `mda: error … uncompilable location` at WARN is what will settle it.
+- **A `Success` call is untouched.** It never enters the function without a `statusDetail`, and the `PartialAnswer`
+  warning example in `FR-MPTI-MEMD-ALL … R9.pdf` p. 14 carries `DetailCode` / `DetailSource` / `Message` and **no
+  `Location`**, which returns on `errorUrl?.let`. So uid 68 `MUTATION` and uid 96 `ONLY_FIVE_PERIODS_RETURNED` were
+  not rendered before and are not rendered now. Should MyCareNet ever send one with a location, it will now come back
+  as its real entry instead of the generic one — and `value` would then hold the **whole serialised
+  `AttributeQuery`**, SSIN included (`:897`, `childNodes.length > 1`), which is a reason not to show `value` blindly.
+- **An error whose resolved path matches no entry used to vanish** once resolution worked. The CIN puts
+  `BO_INVALID_REGNBR` and `BO_UNKNOWN_REGNBR` at path `/`, which a rebuilt `base` never equals, so both returned an
+  empty set. MDA now falls back to one entry carrying the code, the `detailCode` and the resolved path, like the nine
+  other copies — and logs `mda: error … no entry for resolved path` at WARN.
+- **An uncompilable location no longer fails the whole call** (`6dadc3fc8`). None of the five published forms raises,
+  so this is uniformity: MDA was one of four copies with no try/catch, and there the exception travelled up through
+  `errors.forEach` and answered 500 with no message.
+- **`value` is empty when the location named a missing element**, since only the parent resolved. Same rule as eAttest.
+
+One gap left: a location ending in `/text()` resolves the text node, so `nodeDescr` rebuilds
+`…/NameID/#text`, which no entry carries — it lands in the fallback above rather than on uid 78.
 
 `requestType` and `hcpQuality` do not affect this. The `requestType` query parameter is only consumed by the default
 facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`

@@ -374,6 +374,26 @@ the URN in the predicate surviving because it sits between quotes. `MemberDataEr
 One gap left: a location ending in `/text()` resolves the text node, so `nodeDescr` rebuilds
 `…/NameID/#text`, which no entry carries — it lands in the fallback above rather than on uid 78.
 
+**The async channel** (`POST /mda/async/messages`) has its **own** `extractError` overload, and it works
+differently: no request document travels with an acknowledgement, so there is nothing to resolve against and the
+path is compared textually, every `*` and `:` stripped — which turns the `*:name` form into exactly the
+catalogue's path. It got the same treatment in `84c0eb6db`; three of the five published locations rendered nothing
+there before. Two differences to keep in mind:
+
+- **It renders a warning that names no node, and the synchronous channel does not.** A missing `Location` leaves
+  the compared path null, which matches uid 68 `MUTATION` and uid 96 `ONLY_FIVE_PERIODS_RETURNED` — where the
+  synchronous overload returns on `errorUrl?.let`. The asymmetry is on the right side, so it was pinned rather
+  than removed.
+- **A detail with no location and no catalogue entry renders nothing, on purpose.** The published `PartialAnswer`
+  carries `BO_MISSING_FACET` and three `FACET_EXCEPTION`, none of which the catalogue holds; a fallback there
+  would have put four lines reading *"Erreur …status:Success"* on a partially successful answer. The fallback
+  only fires when a location was sent. The raw `FaultType` — `detailCode` and `Message` included — is returned
+  beside `myCarenetErrors` either way, so nothing is lost.
+
+Its filter is also **strict** on `subCode` and `detailCode` where the synchronous one is permissive
+(`detailCode == null || …`). That is why the `regex` clause is inert there: uid 13 and uid 21 share path and code
+but differ by `detailCode`. Deliberately not aligned — the strict form is the tighter of the two.
+
 `requestType` and `hcpQuality` do not affect this. The `requestType` query parameter is only consumed by the default
 facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`
 (`buildOriginType`, line 533), never into the `AttributeQuery`, which identifies the practitioner solely through

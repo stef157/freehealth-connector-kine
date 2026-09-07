@@ -320,7 +320,10 @@ class TarificationServiceImpl(private val stsService: STSService) : Tarification
             val builder = factory.newDocumentBuilder()
 
             val xpath = xPathfactory.newXPath()
-            val expr = xpath.compile(if (url.startsWith("/")) url else "/" + url)
+            val curratedUrl = if (url.startsWith("/")) url else "/" + url
+            val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
+            val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
             val result = mutableSetOf<MycarenetError>()
 
             (expr.evaluate(
@@ -329,7 +332,7 @@ class TarificationServiceImpl(private val stsService: STSService) : Tarification
             ) as NodeList).let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
-                    val textContent = node.textContent
+                    val textContent = if (namesAMissingElement) null else node.textContent
                     var base = "/" + nodeDescr(node)
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"

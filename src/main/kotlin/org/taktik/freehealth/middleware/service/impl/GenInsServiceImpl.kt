@@ -57,9 +57,7 @@ import java.io.ByteArrayInputStream
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
-import javax.xml.namespace.NamespaceContext
 import javax.xml.parsers.DocumentBuilderFactory
-import javax.xml.xpath.XPath
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathFactory
 
@@ -255,9 +253,19 @@ class GenInsServiceImpl(val stsService: STSService) : GenInsService {
             factory.isNamespaceAware = true
             val builder = factory.newDocumentBuilder()
 
-            val xpath = xPathFactory()
-            val expr = xpath.compile(url.replace(Regex("^\\.\\./\\.\\./\\.\\./\\.\\./"),"/gip:GetInsurabilityAsXmlOrFlatRequestType/gip:Request/")
-                                         .replace(Regex("/(CareReceiverId|Inss|RegNrWithMut|Mutuality|InsurabilityRequestDetail|InsurabilityRequestType|Period|PeriodStart|PeriodEnd|InsurabilityContactType|InsurabilityReference)"),"/gic:$1"))
+            // The location eHealth sends here is relative: `../../../../CareReceiverId/Inss/text()`, four
+            // steps up being the request itself. That substitution is a fact of this domain and has to stay —
+            // a `*[local-name()=…]` on a relative path evaluated from the Document has no parent to climb. The
+            // prefixes it used to inject, and the NamespaceContext that bound them, are gone: the rewrite
+            // discards prefixes and matches on the local name whatever the namespace.
+            val curratedUrl = url.replace(
+                Regex("^\\.\\./\\.\\./\\.\\./\\.\\./"),
+                "/GetInsurabilityAsXmlOrFlatRequestType/Request/"
+            )
+            val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
+            val xpath = xPathfactory.newXPath()
+            val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
             val result = mutableSetOf<MycarenetError>()
 
             (expr.evaluate(
@@ -266,7 +274,7 @@ class GenInsServiceImpl(val stsService: STSService) : GenInsService {
                           ) as NodeList).let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
-                    val textContent = node.textContent
+                    val textContent = if (namesAMissingElement) null else node.textContent
                     var base = "/" + nodeDescr(node)
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"
@@ -313,28 +321,4 @@ class GenInsServiceImpl(val stsService: STSService) : GenInsService {
         return localName
     }
 
-    private fun xPathFactory(): XPath {
-        val xpath = xPathfactory.newXPath()
-        xpath.namespaceContext = object : NamespaceContext {
-            override fun getNamespaceURI(prefix: String?) = when (prefix) {
-                "gic" -> "urn:be:fgov:ehealth:genericinsurability:core:v1"
-                "gip" -> "urn:be:fgov:ehealth:genericinsurability:protocol:v1"
-                else -> null
-            }
-
-            override fun getPrefix(namespaceURI: String?) = when (namespaceURI) {
-                "urn:be:fgov:ehealth:genericinsurability:core:v1" -> "gic"
-                "urn:be:fgov:ehealth:genericinsurability:protocol:v1" -> "gip"
-                else -> null
-            }
-
-            override fun getPrefixes(namespaceURI: String?): Iterator<String> =
-                when (namespaceURI) {
-                    "urn:be:fgov:ehealth:genericinsurability:core:v1" -> listOf("gic").iterator()
-                    "urn:be:fgov:ehealth:genericinsurability:protocol:v1" -> listOf("gip").iterator()
-                    else -> listOf<String>().iterator()
-                }
-        }
-        return xpath
-    }
 }

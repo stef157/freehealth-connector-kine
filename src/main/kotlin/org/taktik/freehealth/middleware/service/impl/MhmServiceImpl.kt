@@ -1293,10 +1293,12 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
 
             val result = mutableSetOf<MycarenetError>()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
+            val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
 
             try {
                 val xpath = xPathFactory.newXPath()
-                val expr = xpath.compile(curratedUrl)
+                val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
 
                 (expr.evaluate(
                     builder.parse(ByteArrayInputStream(sendTransactionRequest)),
@@ -1304,7 +1306,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
                 ) as NodeList).let { it ->
                     if (it.length > 0) {
                         val startNode = it.item(0)
-                        val textContent = startNode.textContent
+                        val textContent = if (namesAMissingElement) null else startNode.textContent
                         var elements: List<MycarenetError>
                         var skip = 0
                         do {

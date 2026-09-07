@@ -1421,9 +1421,12 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val kgssSe
             factory.isNamespaceAware = true
             val builder = factory.newDocumentBuilder()
 
+            val curratedUrl = if (url.startsWith("/")) url else "/" + url
+            val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
             val xpath = xPathfactory.newXPath()
             val expr: XPathExpression? = try {
-                xpath.compile(if (url.startsWith("/")) url else "/" + url)
+                xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
             } catch (e: XPathExpressionException) {
                 log.warn("Invalid XPATH returned: `$url‘", e); null
             }
@@ -1434,7 +1437,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val kgssSe
             ) as NodeList?)?.let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
-                    textContent = node.textContent
+                    textContent = if (namesAMissingElement) null else node.textContent
                     var base = "/" + nodeDescr(node)
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"

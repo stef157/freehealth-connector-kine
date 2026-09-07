@@ -1339,10 +1339,12 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
 
             val result = mutableSetOf<MycarenetError>()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
+            val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
 
             try {
                 val xpath = xPathFactory.newXPath()
-                val expr = xpath.compile(curratedUrl)
+                val expr = xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))
 
             (expr.evaluate(
                 builder.parse(ByteArrayInputStream(sendTransactionRequest)),
@@ -1350,7 +1352,7 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
                           ) as NodeList).let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
-                    val textContent = node.textContent
+                    val textContent = if (namesAMissingElement) null else node.textContent
                     var base = "/" + nodeDescr(node)
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"

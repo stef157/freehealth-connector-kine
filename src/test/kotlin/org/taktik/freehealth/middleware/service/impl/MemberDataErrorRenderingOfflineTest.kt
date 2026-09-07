@@ -315,8 +315,11 @@ class MemberDataErrorRenderingOfflineTest {
      * matched on the async channel — which compares the location textually — and **never** on the
      * synchronous one, which resolves it and rebuilds `…/Issuer/#text`.
      *
-     * The location shape is modelled on § 3 of the published examples; no example is published for
-     * `CROSSCHECK_ISSUER` itself.
+     * The location used here is **observed, verbatim**: the official eHealth connector ships it in
+     * `connector-packaging-*-5.1.0-java/config/scenarios/careprovider-response-happy.xml`, a synchronous MDA
+     * scenario answering `AttributeQueryError` / `CROSSCHECK_ISSUER` with exactly this `Location`. An
+     * earlier version of this comment called it "modelled on § 3, not observed"; that understated the
+     * evidence — see `ObservedErrorLocationsTest`.
      */
     @Test
     fun theIssuerCrosscheckIsRenderedOnTheSyncChannel() {

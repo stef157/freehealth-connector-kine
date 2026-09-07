@@ -64,6 +64,23 @@ object ErrorLocationPath {
     )
 
     /**
+     * A trailing `text()` step, written the way `nodeDescr` writes the node it resolves to.
+     *
+     * `text()` is legitimate in step position and the CIN uses it — § 3 of
+     * `FR-EXEM-MEMD-ALL … exemples de réponses.pdf` sends `*:AttributeQuery / *:Subject / *:NameID / text()`
+     * (separators spaced out: Kotlin nests block comments, and a bare slash-star would open one). It
+     * resolves to a text node, and `nodeDescr` writes that `#text`: a text node has no `localName`, its
+     * `nodeName` is `#text`, and the de-prefixing regex leaves it alone. That is why `GenInsErrors.json`
+     * indexes its 21 text entries as `…/Inss/#text` rather than `…/Inss/text()`.
+     *
+     * **This is not XPath and must never reach `xpath.compile`.** It exists for the one caller that has no
+     * document to resolve against — the async MemberData overload, which compares the location textually —
+     * so that both channels arrive at the same string.
+     */
+    fun resolvedTextStep(locationPath: String) =
+        if (locationPath.endsWith("/text()")) locationPath.removeSuffix("/text()") + "/#text" else locationPath
+
+    /**
      * The part of a location path that can actually be resolved.
      *
      * The CIN error tables name a *missing* element with a `not(…)` **step** — `/AttributeQuery/not(*:Issuer)`,

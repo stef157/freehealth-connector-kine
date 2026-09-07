@@ -997,7 +997,9 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
             // the `regex` to match. The clause is inert on this overload — the strict `detailCode` already
             // separates the eight entries that carry a pattern — and is here for uniformity with the ten
             // other copies of this matching.
-            val path = ErrorLocationPath.resolvableSteps(curratedUrl).replace("(\\*|:)".toRegex(), "")
+            val path = ErrorLocationPath.resolvedTextStep(
+                ErrorLocationPath.resolvableSteps(curratedUrl).replace("(\\*|:)".toRegex(), "")
+            )
             MemberDataErrors.values.filter {
                 it.path == path && it.code == code1 && it.subCode == code2 && it.detailCode == detailCode &&
                     (it.regex == null || curratedUrl.matches(Regex(".*" + it.regex + ".*")))

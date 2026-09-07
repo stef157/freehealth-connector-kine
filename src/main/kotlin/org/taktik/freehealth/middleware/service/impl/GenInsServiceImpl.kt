@@ -246,7 +246,7 @@ class GenInsServiceImpl(val stsService: STSService) : GenInsService {
         }
     }
 
-    private fun extractError(sendTransactionRequest: ByteArray, ec: String, errorUrl: String?): Set<MycarenetError> {
+    internal fun extractError(sendTransactionRequest: ByteArray, ec: String, errorUrl: String?): Set<MycarenetError> {
         //For some reason... The path starts with ../../../../ which corrsponds to the request
         return errorUrl?.let { url ->
             val factory = DocumentBuilderFactory.newInstance()

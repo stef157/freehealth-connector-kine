@@ -68,6 +68,12 @@ class MemberDataErrorRenderingOfflineTest {
         ) as Any
     )
 
+    private companion object {
+        const val CROSSCHECK_LOCATION = "/*:AttributeQuery/*:Issuer/text()"
+        const val CROSSCHECK_CODE1 = "urn:oasis:names:tc:SAML:2.0:status:Requester"
+        const val CROSSCHECK_CODE2 = "urn:be:cin:nippin:SAML:status:RequestError"
+    }
+
     // ------------------------------------------------------------------ the invariants
 
     /**
@@ -291,6 +297,71 @@ class MemberDataErrorRenderingOfflineTest {
         assertThat(errors.single().msgFr)
             .describedAs("the caller is told the location could not be compiled, and gets the reason")
             .startsWith("Erreur générique, xpath invalide : ")
+    }
+
+    // ------------------------------------------------------------------ the text step
+
+    /**
+     * `CROSSCHECK_ISSUER` — uid 5, the one entry of this catalogue that names a text node.
+     *
+     * It matters here: it is MyCareNet comparing the `AttributeQuery/Issuer` NIHII with the one in the
+     * gen(A)Sync `CommonInput`, and CLAUDE.md records the token advertising `…501` where the address book
+     * returns `…527` for the same person.
+     *
+     * `nodeDescr` writes a resolved text node `#text`, which is the notation `GenInsErrors.json` uses for
+     * its 21 text entries (see `ErrorCatalogueReachabilityTest`). uid 5 was written `text()` instead, so it
+     * matched on the async channel — which compares the location textually — and **never** on the
+     * synchronous one, which resolves it and rebuilds `…/Issuer/#text`.
+     *
+     * The location shape is modelled on § 3 of the published examples; no example is published for
+     * `CROSSCHECK_ISSUER` itself.
+     */
+    @Test
+    fun theIssuerCrosscheckIsRenderedOnTheSyncChannel() {
+        val sync = memberData.extractError(
+            attributeQuery,
+            CROSSCHECK_CODE1,
+            CROSSCHECK_CODE2,
+            CROSSCHECK_LOCATION,
+            "CROSSCHECK_ISSUER"
+        )
+
+        assertThat(sync.map { it.uid }).containsExactly("5")
+        assertThat(sync.single().value)
+            .describedAs("the offending node of our own request — the practitioner's NIHII")
+            .isEqualTo("99007334527")
+    }
+
+    /**
+     * The other half of the same entry, and the reason the correction cannot be made alone: uid 5 is
+     * reachable on the **async** channel today, because that overload compares the location textually and
+     * the entry was written in the same `text()` form. Rewriting the entry to `#text` without teaching this
+     * overload the same translation would turn this green into a red.
+     */
+    @Test
+    fun theIssuerCrosscheckStaysRenderedOnTheAsyncChannel() {
+        assertThat(
+            memberData.extractError(CROSSCHECK_CODE1, CROSSCHECK_CODE2, CROSSCHECK_LOCATION, "CROSSCHECK_ISSUER")
+                .map { it.uid }
+        ).containsExactly("5")
+    }
+
+    /**
+     * What the text step does **not** fix, on either channel: § 3 of the published examples,
+     * `BO_UNKNOWN_REGNBR`, whose entry uid 78 the catalogue anchors at `/`. No compared path ever equals
+     * `/`, so it stays in the fallback — the notes that called this "the `/text()` gap" conflated it with
+     * uid 5 above.
+     */
+    @Test
+    fun thePublishedTextLocationStaysInTheFallback() {
+        val location = "/*:AttributeQuery/*:Subject/*:NameID/text()"
+        val code1 = "urn:oasis:names:tc:SAML:2.0:status:Responder"
+        val code2 = "urn:be:cin:nippin:SAML:status:InternalError"
+
+        assertThat(memberData.extractError(attributeQuery, code1, code2, location, "BO_UNKNOWN_REGNBR").map { it.uid })
+            .containsExactly(null)
+        assertThat(memberData.extractError(code1, code2, location, "BO_UNKNOWN_REGNBR").map { it.uid })
+            .containsExactly(null)
     }
 
     // ------------------------------------------------------------------ the async channel

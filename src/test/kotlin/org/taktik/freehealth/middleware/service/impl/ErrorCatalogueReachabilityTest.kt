@@ -20,6 +20,9 @@
 
 package org.taktik.freehealth.middleware.service.impl
 
+import be.fgov.ehealth.genericinsurability.core.v1.CareReceiverIdType
+import be.fgov.ehealth.genericinsurability.core.v1.SingleInsurabilityRequestType
+import be.fgov.ehealth.genericinsurability.protocol.v1.GetInsurabilityAsXmlOrFlatRequestType
 import be.fgov.ehealth.medicalagreement.core.v1.Kmehrrequest
 import be.fgov.ehealth.messageservices.core.v1.RetrieveTransactionRequest
 import be.fgov.ehealth.standards.kmehr.schema.v1.AuthorType
@@ -242,6 +245,77 @@ class ErrorCatalogueReachabilityTest {
             entry("MemberDataErrors", 8),
             entry("ConsultTarificationMediprimaErrors", 1)
         )
+    }
+
+    /**
+     * How a text step is written, settled on the one domain that indexes them.
+     *
+     * `nodeDescr` writes a resolved text node `#text` — a text node has no `localName`, its `nodeName` is
+     * `#text`, and the de-prefixing regex leaves it alone. `GenInsErrors.json` carries **21** entries in
+     * that notation and the eHealth location for this domain is relative and ends in `text()`
+     * (`../../../../CareReceiverId/Inss/text()`), which `GenInsServiceImpl` substitutes into
+     * `/GetInsurabilityAsXmlOrFlatRequestType/Request/…`.
+     *
+     * The paths are right against the XSD: `ehealth-genins-core-1_1.xsd` declares `CareReceiverId` as a
+     * **direct** child of the request, sibling of `InsurabilityRequestDetail`. And the root element really
+     * is the type name — `MarshallerHelper.translate` builds the QName from `getSimpleName()` when the class
+     * carries no `@XmlRootElement`, which this one does not.
+     *
+     * This is the reference: it is what says `#text` rather than `text()` is the notation of this
+     * repository, and it must not be "normalised" away.
+     */
+    @Test
+    fun genInsReachesAnEntryIndexedOnATextNode() {
+        val request = GetInsurabilityAsXmlOrFlatRequestType().apply {
+            request = SingleInsurabilityRequestType().apply {
+                careReceiverId = CareReceiverIdType().apply { inss = "12345678901" }
+            }
+        }
+        val marshalled = MarshallerHelper(
+            GetInsurabilityAsXmlOrFlatRequestType::class.java,
+            GetInsurabilityAsXmlOrFlatRequestType::class.java
+        ).toXMLByteArray(request)
+
+        val errors = GenInsServiceImpl(mock(STSService::class.java))
+            .extractError(marshalled, "12", "../../../../CareReceiverId/Inss/text()")
+
+        assertThat(errors.map { it.uid })
+            .describedAs("code 12 is unique in GenInsErrors, so the match is unambiguous")
+            .containsExactly("1")
+        assertThat(errors.single().path)
+            .isEqualTo("/GetInsurabilityAsXmlOrFlatRequestType/Request/CareReceiverId/Inss/#text")
+        assertThat(errors.single().value).isEqualTo("12345678901")
+    }
+
+    /**
+     * The notation of a text step, measured over every catalogue rather than asserted.
+     *
+     * `nodeDescr` produces `#text`, so that is what an entry must carry to be reachable. GenIns had 21 such
+     * entries and MemberData one written `text()` — the odd one out, uid 5 `CROSSCHECK_ISSUER`, which could
+     * therefore only ever match on the async channel, where the location is compared textually.
+     */
+    @Test
+    fun noCatalogueIndexesATextStepAsAFunctionCall() {
+        val mapper = ObjectMapper()
+        fun catalogue(name: String) = mapper.readValue<Array<MycarenetError>>(
+            javaClass.getResourceAsStream("/be/errors/$name.json")!!
+        )
+
+        val consulted = listOf(
+            "eAttestErrors", "mhmSubscriptionError", "ConsultTarifErrors",
+            "ConsultTarificationMediprimaErrors", "Chapter4AgreementErrors", "Chapter4ConsultationErrors",
+            "Chapter4ConsultationWarnings", "DmgConsultationErrors", "DmgNotificationErrors",
+            "DmgRegistrationErrors", "DmgListsConsultationErrors", "GenInsErrors", "MemberDataErrors"
+        )
+
+        assertThat(consulted.flatMap { name ->
+            catalogue(name).mapNotNull { it.path }.filter { it.endsWith("/text()") }.map { "$name: $it" }
+        }).describedAs("`text()` can never equal what nodeDescr rebuilds").isEmpty()
+
+        assertThat(consulted.associateWith { name ->
+            catalogue(name).mapNotNull { it.path }.count { it.endsWith("/#text") }
+        }.filterValues { it > 0 })
+            .containsOnly(entry("GenInsErrors", 21), entry("MemberDataErrors", 1))
     }
 
     /**

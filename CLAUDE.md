@@ -388,8 +388,8 @@ value entries (uid 39, 40, 45, 46, all at `/AttributeQuery/Subject/NameID`) at t
 correct entries unreachable. The two readings exclude each other.
 
 **An attribute step is written `@name`, and `MemberDataErrors.json` indexes eleven entries that way** — which
-is the opposite of what this file said one commit earlier ("no catalogue is written that way"; that was the
-fourth documented claim this work has had to withdraw). uid 6 `@ID`, uid 15 and 38/43/44 `@Format`, uid 20
+is the opposite of what this file said one commit earlier ("no catalogue is written that way" — one more claim
+this work has had to withdraw). uid 6 `@ID`, uid 15 and 38/43/44 `@Format`, uid 20
 `@xsi:type`, uid 49 `@Method`, and **uid 53/54/55/57 on `@NotBefore` / `@NotOnOrAfter`** — the coverage window
 `getAttrQuery` writes `date` and `endDate` into. A DOM attribute has no `parentNode`, so the climb in
 `extractError` never ran and `base` came out as the bare name: `@Format` gave `/Format`, `@NotBefore` gave

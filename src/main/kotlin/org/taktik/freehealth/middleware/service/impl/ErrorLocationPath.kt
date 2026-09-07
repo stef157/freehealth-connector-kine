@@ -128,7 +128,9 @@ object ErrorLocationPath {
      * `item[not(cd[@S='CD-ITEM'])]` → `*[local-name()='item'][not(*[local-name()='cd'][@S='CD-ITEM'])]`.
      *
      * Left alone: quoted literals (both quote styles arrive from the OAs), attribute tests together with
-     * their prefix (`@S`, `@xsi:type` — attributes in these schemas are unqualified), function and node-type
+     * their prefix (`@S`, `@xsi:type`) — the one qualified attribute met so far, `xsi:type`, resolves
+     * because Saxon binds `xsi` in its default static context, measured, not because it were unqualified —,
+     * function and node-type
      * calls (an NCName followed by `(`: `not`, `text`, `count`), axes (`child::`), `.`, `..`, a bare `*`,
      * numbers, and the four operator words. The rewrite is idempotent: an already agnostic path comes back
      * unchanged.

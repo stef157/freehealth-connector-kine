@@ -330,11 +330,22 @@ Two traps when reading an MDA failure:
   `/AttributeQuery/Extensions/Facet[urn:be:cin:nippin:insurability]/Dimension[requestType]` — and `value`, the
   offending node from your own request. Those name what the message never does.
 
-**Until `c6ea7e740`, no MDA location resolved at all**, so none of the fields above were ever filled: every error
-*and every warning* came back as one entry with a null `uid` and *"Erreur générique, xpath invalide"*. The
-`AttributeQuery` is serialised with prefixes (`<ns3:AttributeQuery>`, `<ns6:Subject>`) while `extractError` parsed it
-with `isNamespaceAware = false`, which leaves `localName` null and makes every node answer only to its prefixed
-`nodeName` — so `/AttributeQuery` matched nothing. Three consequences to know:
+**How much of this actually changed, measured form by form** on the four published locations, before the batch
+(`68010d38f~`) and after. Three of the four are identical, which is the short answer to "does this move what a real
+MDA call returns":
+
+| published `Location` | before | after |
+|---|---|---|
+| `*:AttributeQuery/*:Subject/*:NameID` | uid 62, `value` = the SSIN | identical |
+| …the same + `[@Format='urn:be:cin:nippin:member:ssin@mut']` | generic entry, `uid` null | identical (the predicate legitimately does not match an `ssin` query) |
+| …the same, leading slash, trailing `text()` | **empty set — nothing at all** | one entry, resolved path `…/NameID/#text`, `value` = the SSIN |
+| empty element | uid 75 | identical |
+
+So the `*:name` form the CIN sends **did** resolve before: Saxon matches it against a non-namespace-aware DOM. What
+did not resolve is an **unprefixed** location — `/AttributeQuery`, and the parent of a truncated `not(…)` step, which
+is unprefixed by construction — because `isNamespaceAware = false` leaves `localName` null and every node answers only
+to its prefixed `nodeName`. `c6ea7e740` says "no MDA location resolved, ever"; that is too wide, and this table is
+what it should have said. Four consequences to know:
 
 **The `Location` shapes are documented, not guessed** — `FR-EXEM-MEMD-ALL Données du membre Async - exemples de
 réponses.pdf` (April 2021) publishes five, and they are the only observed ones: `*:AttributeQuery/*:Subject/*:NameID`
@@ -349,10 +360,12 @@ the URN in the predicate surviving because it sits between quotes. `MemberDataEr
   not rendered before and are not rendered now. Should MyCareNet ever send one with a location, it will now come back
   as its real entry instead of the generic one — and `value` would then hold the **whole serialised
   `AttributeQuery`**, SSIN included (`:897`, `childNodes.length > 1`), which is a reason not to show `value` blindly.
-- **An error whose resolved path matches no entry used to vanish** once resolution worked. The CIN puts
-  `BO_INVALID_REGNBR` and `BO_UNKNOWN_REGNBR` at path `/`, which a rebuilt `base` never equals, so both returned an
-  empty set. MDA now falls back to one entry carrying the code, the `detailCode` and the resolved path, like the nine
-  other copies — and logs `mda: error … no entry for resolved path` at WARN.
+- **An error whose resolved path matches no entry used to vanish.** The CIN puts `BO_INVALID_REGNBR` and
+  `BO_UNKNOWN_REGNBR` at path `/`, which a rebuilt `base` never equals, and MDA was the one copy with no "nothing
+  matched" branch, so the error returned an empty set. `f95492b2a` calls that a consequence of the resolution work;
+  the table above shows it was **pre-existing** — the `text()` form already returned `[]` before the batch. MDA now
+  falls back to one entry carrying the code, the `detailCode` and the resolved path, like the nine other copies, and
+  logs `mda: error … no entry for resolved path` at WARN.
 - **An uncompilable location no longer fails the whole call** (`6dadc3fc8`). None of the five published forms raises,
   so this is uniformity: MDA was one of four copies with no try/catch, and there the exception travelled up through
   `errors.forEach` and answered 500 with no message.

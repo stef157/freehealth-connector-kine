@@ -88,15 +88,17 @@ class MemberDataErrorRenderingOfflineTest {
      * That a location resolves at all.
      *
      * The `AttributeQuery` MDA sends is namespace-qualified and serialised with prefixes —
-     * `<ns3:AttributeQuery>`, `<ns6:Subject>`. `extractError` parsed it with
-     * `isNamespaceAware = false`, which leaves `localName` null and makes every DOM node answer to its
-     * prefixed `nodeName`, so an unprefixed location like `/AttributeQuery` matched nothing. **No MDA
-     * location resolved, ever**: every error and every warning came back as the fallback entry, `uid` null,
-     * "Erreur générique, xpath invalide".
+     * `<ns3:AttributeQuery>`, `<ns6:Subject>`. `extractError` parsed it with `isNamespaceAware = false`,
+     * which leaves `localName` null and makes every DOM node answer to its prefixed `nodeName`. Saxon still
+     * matched the `*:name` form the CIN actually sends (measured — see
+     * `theLocationsTheCinPublishesAllRender`), but an **unprefixed** location like `/AttributeQuery` matched
+     * nothing, and so did the parent of a truncated `not(…)` step, which is unprefixed by construction.
      *
-     * These are the two warnings a real MDA call returns, uid 68 `MUTATION` and uid 96
-     * `ONLY_FIVE_PERIODS_RETURNED` (`Success` / `PartialAnswer`). They carry no `path`, so reaching them
-     * needed nothing but a nodeset — which is exactly what was missing.
+     * uid 68 `MUTATION` and uid 96 `ONLY_FIVE_PERIODS_RETURNED` (`Success` / `PartialAnswer`) carry no
+     * `path`, so reaching them needs nothing but a nodeset. Whether MyCareNet ever sends them with a
+     * `Location` is a different question, and the answer is documented as no: the `PartialAnswer` example in
+     * `FR-MPTI-MEMD-ALL … R9.pdf` p. 14 has `DetailCode` / `DetailSource` / `Message` and no `Location` at
+     * all, which returns on `errorUrl?.let`. This test says what happens *if* one ever carries one.
      */
     @Test
     fun theSuccessWarningsAreRendered() {
@@ -187,6 +189,7 @@ class MemberDataErrorRenderingOfflineTest {
         assertThat(invalidRegNbr.single().code).isEqualTo("urn:oasis:names:tc:SAML:2.0:status:Responder")
 
         // § 3 — a `text()` step. The rebuilt base ends `/#text`, which the catalogue does not carry either.
+        // This is the one published form whose rendering changed: it returned an empty set before the batch.
         val unknownRegNbr = at(
             "/*:AttributeQuery/*:Subject/*:NameID/text()",
             "urn:oasis:names:tc:SAML:2.0:status:Responder",

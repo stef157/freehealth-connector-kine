@@ -1470,8 +1470,7 @@ class Chapter4ServiceImpl(private val stsService: STSService, private val kgssSe
         if (elements.isEmpty()) {
             elements = errors.values.filter { it.code == ec }
         }
-        elements.forEach { it.value = textContent }
-        result.addAll(elements)
+        result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
 
         return result
     }

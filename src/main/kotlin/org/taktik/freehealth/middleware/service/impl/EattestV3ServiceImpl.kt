@@ -1422,32 +1422,6 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         DateTime(0).withYear(year).withMonthOfYear(month).withDayOfMonth(day).withHourOfDay(hour).withMinuteOfHour(minutes).withSecondOfMinute(seconds)
     }
 
-    /**
-     * A catalogue entry rendered for one node of one request.
-     *
-     * `eAttestErrors` is read once into this singleton `@Service`, so its `MycarenetError` entries are shared by
-     * every caller. Writing `value` on the entry itself published the offending node of one caller's request —
-     * a NIHII, an SSIN, a date — into the catalogue every other caller reads from, and the returned set kept the
-     * reference, so a concurrent call could rewrite it between the rendering and the serialisation. The entry is
-     * a template; each error gets its own copy.
-     */
-    private fun MycarenetError.renderedFor(textContent: String?) = MycarenetError(
-        uid = uid,
-        path = path,
-        regex = regex,
-        locFr = locFr,
-        locNl = locNl,
-        msgFr = msgFr,
-        msgNl = msgNl,
-        msgEn = msgEn,
-        code = code,
-        subCode = subCode,
-        faultCode = faultCode,
-        faultSource = faultSource,
-        detailCode = detailCode,
-        detailSource = detailSource,
-        value = textContent
-    )
 
     /**
      * The errors an acknowledgement carries, rendered against the request that provoked them.
@@ -1501,7 +1475,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                             it.path == base && it.code == ec && (it.regex == null || url.matches(Regex(".*" + it.regex + ".*")))
                         }
                     if (elements.isNotEmpty()) {
-                        result.addAll(elements.map { it.renderedFor(textContent) })
+                        result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                     } else {
                         result.add(
                             MycarenetError(

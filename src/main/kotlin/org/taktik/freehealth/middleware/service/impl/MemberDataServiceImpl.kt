@@ -909,8 +909,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                             MemberDataErrors.values.filter { (it.path == null || it.path == oBase) && it.code == code1 && (code2 == null || it.subCode == code2) && (detailCode == null || it.detailCode == detailCode) }
                     }
 
-                    elements.forEach { it.value = textContent }
-                    result.addAll(elements)
+                    result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                 } else {
                     result.add(
                         MycarenetError(

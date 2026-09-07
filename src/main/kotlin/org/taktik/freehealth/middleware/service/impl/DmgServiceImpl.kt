@@ -1276,8 +1276,7 @@ class DmgServiceImpl(private val stsService: STSService) : DmgService {
         if (elements.isEmpty()) {
             elements = errors.values.filter { it.code == ec }
         }
-        elements.forEach { it.value = textContent }
-        result.addAll(elements)
+        result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
 
         return result
     }

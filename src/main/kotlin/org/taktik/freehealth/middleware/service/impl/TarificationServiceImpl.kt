@@ -352,8 +352,7 @@ class TarificationServiceImpl(private val stsService: STSService) : Tarification
                         initialElements
                     }
 
-                    elements.forEach { it.value = textContent }
-                    result.addAll(elements)
+                    result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                 } else {
                     log.warn("tarification: error $ec, unresolved location `$url\u00b4")
                     result.add(

@@ -485,8 +485,7 @@ class MediprimaServiceImpl(val stsService: STSService, keyDepotService: KeyDepot
                         initialElements
                     }
 
-                    elements.forEach { it.value = textContent }
-                    result.addAll(elements)
+                    result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                 } else {
                     log.warn("mediprima: error $ec, unresolved location `$url\u00b4")
                     result.add(

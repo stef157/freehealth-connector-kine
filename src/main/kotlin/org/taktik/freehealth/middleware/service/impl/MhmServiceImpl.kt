@@ -1331,8 +1331,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
                                     it.code == ec && (it.regex == null || url.matches(Regex(".*" + it.regex + ".*")))
                                 }
                         }
-                        elements.forEach { it.value = textContent }
-                        result.addAll(elements)
+                        result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                     } else {
                         log.warn("mhm: error $ec, unresolved location `$url\u00b4")
                         result.add(

@@ -20,6 +20,8 @@
 
 package org.taktik.freehealth.middleware.service.impl
 
+import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetError
+
 /**
  * The location an eHealth acknowledgement error points at, made resolvable.
  *
@@ -33,6 +35,33 @@ package org.taktik.freehealth.middleware.service.impl
  * Both functions are pure. Measured by `ErrorLocationPathTest`.
  */
 object ErrorLocationPath {
+
+    /**
+     * A catalogue entry rendered for one node of one request.
+     *
+     * `eAttestErrors` is read once into this singleton `@Service`, so its `MycarenetError` entries are shared by
+     * every caller. Writing `value` on the entry itself published the offending node of one caller's request —
+     * a NIHII, an SSIN, a date — into the catalogue every other caller reads from, and the returned set kept the
+     * reference, so a concurrent call could rewrite it between the rendering and the serialisation. The entry is
+     * a template; each error gets its own copy.
+     */
+    fun renderedFor(entry: MycarenetError, textContent: String?) = MycarenetError(
+        uid = entry.uid,
+        path = entry.path,
+        regex = entry.regex,
+        locFr = entry.locFr,
+        locNl = entry.locNl,
+        msgFr = entry.msgFr,
+        msgNl = entry.msgNl,
+        msgEn = entry.msgEn,
+        code = entry.code,
+        subCode = entry.subCode,
+        faultCode = entry.faultCode,
+        faultSource = entry.faultSource,
+        detailCode = entry.detailCode,
+        detailSource = entry.detailSource,
+        value = textContent
+    )
 
     /**
      * The part of a location path that can actually be resolved.

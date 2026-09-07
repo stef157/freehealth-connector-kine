@@ -1362,8 +1362,7 @@ class EattestV2ServiceImpl(private val stsService: STSService, private val keyDe
                         eAttestErrors.values.filter {
                             it.path == base && it.code == ec && (it.regex == null || url.matches(Regex(".*" + it.regex + ".*")))
                         }
-                    elements.forEach { it.value = textContent }
-                    result.addAll(elements)
+                    result.addAll(elements.map { ErrorLocationPath.renderedFor(it, textContent) })
                 } else {
                     log.warn("eattestv2: error $ec, unresolved location `$url\u00b4")
                     result.add(

@@ -137,4 +137,43 @@ class ErrorCatalogueReachabilityTest {
         assertThat(errors.single().uid).isEqualTo("6")
         assertThat(errors.single().path).isEqualTo("/kmehrrequest/kmehrmessage/folder/transaction/author")
     }
+
+    /**
+     * The catalogue is a set of templates, not a scratchpad — measured on a ported domain.
+     *
+     * `ConsultTarifErrors` is read once into the singleton `@Service`, and `extractError` used to render an
+     * error by writing `value` onto the catalogue entry itself, then return that very entry. While nothing
+     * resolved, `elements` was always empty and the write never happened; making the location resolve turned
+     * it on. Two renderings of the same entry must not see each other.
+     */
+    @Test
+    fun tarificationDoesNotWriteIntoItsSharedCatalogue() {
+        val tarification = TarificationServiceImpl(mock(STSService::class.java))
+
+        fun renderOnce(requestId: String) = tarification.extractError(
+            MarshallerHelper(RetrieveTransactionRequest::class.java, RetrieveTransactionRequest::class.java)
+                .toXMLByteArray(RetrieveTransactionRequest().apply {
+                    request = be.fgov.ehealth.messageservices.core.v1.RequestType().apply {
+                        id = IDKMEHR().apply {
+                            s = IDKMEHRschemes.ID_KMEHR
+                            sv = "1.0"
+                            value = requestId
+                        }
+                    }
+                }),
+            "111",
+            "/RetrieveTransactionRequest/request/id"
+        ).single()
+
+        val first = renderOnce("11111111111.20260907120000")
+        assertThat(first.value).isEqualTo("11111111111.20260907120000")
+
+        val second = renderOnce("22222222222.20260907130000")
+
+        assertThat(second.value).isEqualTo("22222222222.20260907130000")
+        assertThat(first.value)
+            .describedAs("the first caller's node, after a second caller rendered the same entry")
+            .isEqualTo("11111111111.20260907120000")
+        assertThat(first).isNotSameAs(second)
+    }
 }

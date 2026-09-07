@@ -134,6 +134,41 @@ class EattestV3ErrorRenderingOfflineTest {
         assertThat(errors.map { it.code }).contains("111")
     }
 
+    /**
+     * The catalogue is a set of templates, not a scratchpad.
+     *
+     * `eAttestErrors` is read once into the singleton `@Service`, so rendering an error by writing `value` on the
+     * catalogue entry itself published one caller's offending node — here the request id, elsewhere an SSIN — into
+     * the entry every other caller reads. Two renderings of the same (path, code) pair must not see each other.
+     */
+    @Test
+    fun renderingAnErrorDoesNotWriteIntoTheSharedCatalogue() {
+        fun renderOnce(requestId: String) = service.errorsOf(
+            listOf(
+                acknowledgeError(
+                    code = "111",
+                    scheme = CDERRORMYCARENETschemes.CD_ERROR,
+                    url = "/SendTransactionRequest/request/id"
+                )
+            ),
+            request(requestId = requestId)
+        ).single()
+
+        val first = renderOnce("11111111111.20260907120000")
+        assertThat(first.msgFr)
+            .describedAs("uid 1 of the catalogue, i.e. the matched branch and not the fallback")
+            .isEqualTo("Le format de l'identification de la requête n'est pas complété ou est erroné")
+        assertThat(first.value).isEqualTo("11111111111.20260907120000")
+
+        val second = renderOnce("22222222222.20260907130000")
+
+        assertThat(second.value).isEqualTo("22222222222.20260907130000")
+        assertThat(first.value)
+            .describedAs("the first caller's node, after a second caller rendered the same catalogue entry")
+            .isEqualTo("11111111111.20260907120000")
+        assertThat(first).isNotSameAs(second)
+    }
+
     /** No error, or no acknowledged error list at all, is not an error. */
     @Test
     fun anAcknowledgementWithoutErrorsRendersNone() {

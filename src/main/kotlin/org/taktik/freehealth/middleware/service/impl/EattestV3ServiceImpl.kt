@@ -280,17 +280,13 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 ).toObject(blob.content)
             }
 
-            val errors = sendTransactionResponse.acknowledge.errors?.flatMap { e ->
-                e.cds.find { it.s == CDERRORMYCARENETschemes.CD_ERROR }?.value?.let { ec ->
-                    extractError(requestXml, ec, e.url)
-                } ?: setOf()
-            }
+            val errors = errorsOf(sendTransactionResponse.acknowledge.errors, requestXml)
             val commonOutput = cancelAttestationResponse.`return`.commonOutput
             sendTransactionResponse?.kmehrmessage?.folders?.firstOrNull()?.let { folder ->
                 SendAttestResultWithResponse(
                     acknowledge = EattestAcknowledgeType(
                         iscomplete = sendTransactionResponse.acknowledge.isIscomplete,
-                        errors = errors ?: listOf()
+                        errors = errors
                                                         ),
                     xades = xades?.value,
                     commonOutput = CommonOutput(commonOutput?.inputReference, commonOutput?.nipReference, commonOutput?.outputReference),
@@ -306,7 +302,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             } ?: SendAttestResultWithResponse(
                 acknowledge = EattestAcknowledgeType(
                     iscomplete = sendTransactionResponse.acknowledge.isIscomplete,
-                    errors = errors ?: listOf()
+                    errors = errors
                                                     ),
                 xades = xades?.value,
                 mycarenetConversation = MycarenetConversation().apply {
@@ -524,17 +520,13 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                     ).toObject(encryptedKnownContent.businessContent.value), signatureVerificationResult
                                        )
 
-            val errors = decryptedAndVerifiedResponse.sendTransactionResponse.acknowledge.errors?.flatMap { e ->
-                e.cds.find { it.s == CDERRORMYCARENETschemes.CD_ERROR }?.value?.let { ec ->
-                    extractError(requestXml, ec, e.url)
-                } ?: setOf()
-            }
+            val errors = errorsOf(decryptedAndVerifiedResponse.sendTransactionResponse.acknowledge.errors, requestXml)
             val commonOutput = sendAttestationResponse.`return`.commonOutput
             decryptedAndVerifiedResponse.sendTransactionResponse?.kmehrmessage?.folders?.firstOrNull()?.let { folder ->
                 SendAttestResultWithResponse(
                     acknowledge = EattestAcknowledgeType(
                         iscomplete = decryptedAndVerifiedResponse.sendTransactionResponse.acknowledge.isIscomplete,
-                        errors = errors ?: listOf()
+                        errors = errors
                                                         ),
                     invoicingNumber = folder.transactions.find { it.cds.any { it.s == CD_TRANSACTION_MYCARENET && it.value == "cga" } }?.let {
                         it.item.find { it.cds.any { it.s == CD_ITEM_MYCARENET && it.value == "invoicingnumber" } }
@@ -560,7 +552,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             } ?: SendAttestResultWithResponse(
                 acknowledge = EattestAcknowledgeType(
                     iscomplete = decryptedAndVerifiedResponse.sendTransactionResponse.acknowledge.isIscomplete,
-                    errors = errors ?: listOf()
+                    errors = errors
                                                     ),
                 xades = xades,
                 mycarenetConversation = MycarenetConversation().apply {
@@ -1430,7 +1422,23 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         DateTime(0).withYear(year).withMonthOfYear(month).withDayOfMonth(day).withHourOfDay(hour).withMinuteOfHour(minutes).withSecondOfMinute(seconds)
     }
 
-    private fun extractError(sendTransactionRequest: ByteArray, ec: String, errorUrl: String?): Set<MycarenetError> {
+    /**
+     * The errors an acknowledgement carries, rendered against the request that provoked them.
+     *
+     * `CDERRORMYCARENETschemes` holds exactly two values: an error is coded under `CD-ERROR`, a **refusal** under
+     * `CD-REFUSAL-MYCARENET`. Reading only the first dropped every refusal: the `flatMap` yielded an empty set, so
+     * the response came back `iscomplete = false` with `errors = []` — a refusal carrying no motive. The last
+     * fallback covers a `cd` whose scheme is absent.
+     */
+    internal fun errorsOf(errors: List<ErrorMyCarenetType>?, requestXml: ByteArray): List<MycarenetError> =
+        errors?.flatMap { e ->
+            val errorCode = e.cds.find { it.s == CDERRORMYCARENETschemes.CD_ERROR }?.value
+                ?: e.cds.find { it.s == CDERRORMYCARENETschemes.CD_REFUSAL_MYCARENET }?.value
+                ?: e.cds.firstOrNull()?.value
+            errorCode?.let { ec -> extractError(requestXml, ec, e.url, e.description?.value) } ?: setOf()
+        } ?: listOf()
+
+    private fun extractError(sendTransactionRequest: ByteArray, ec: String, errorUrl: String?, description: String? = null): Set<MycarenetError> {
         return errorUrl?.let { url ->
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
@@ -1459,8 +1467,20 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                         eAttestErrors.values.filter {
                             it.path == base && it.code == ec && (it.regex == null || url.matches(Regex(".*" + it.regex + ".*")))
                         }
-                    elements.forEach { it.value = textContent }
-                    result.addAll(elements)
+                    if (elements.isNotEmpty()) {
+                        elements.forEach { it.value = textContent }
+                        result.addAll(elements)
+                    } else {
+                        result.add(
+                            MycarenetError(
+                                code = ec,
+                                path = base,
+                                value = textContent,
+                                msgFr = description ?: "Erreur $ec",
+                                msgNl = description ?: "Fout $ec"
+                                          )
+                                  )
+                    }
                 } else {
                     result.add(
                         MycarenetError(

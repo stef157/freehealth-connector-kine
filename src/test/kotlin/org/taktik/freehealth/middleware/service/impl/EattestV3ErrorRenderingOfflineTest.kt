@@ -236,6 +236,84 @@ class EattestV3ErrorRenderingOfflineTest {
         assertThat(service.namespaceAgnostic(once)).isEqualTo(once)
     }
 
+    /**
+     * A `not(…)` step names an element that is *absent*, so only its parent can be resolved. The CIN tables
+     * write it that way — `/AttributeQuery/not(*:Issuer)` sits verbatim in `MemberDataErrors.json` — and it
+     * is not valid XPath, a function cannot follow `/`.
+     */
+    @Test
+    fun resolvableStepsDropsOnlyAMissingElementStep() {
+        assertThat(service.resolvableSteps("/SendTransactionRequest/kmehrmessage/folder/transaction/not(*:patientpaid)"))
+            .isEqualTo("/SendTransactionRequest/kmehrmessage/folder/transaction")
+
+        // The predicate form is valid XPath and must survive untouched — the safe-superset property.
+        assertThat(service.resolvableSteps("/folder/transaction[not(item)]"))
+            .isEqualTo("/folder/transaction[not(item)]")
+
+        // `not(` inside a predicate is not a step, whatever follows it.
+        assertThat(service.resolvableSteps("/folder/transaction[not(item)]/author"))
+            .isEqualTo("/folder/transaction[not(item)]/author")
+
+        // A node type test is legitimate in step position.
+        assertThat(service.resolvableSteps("/AttributeQuery/Issuer/text()"))
+            .isEqualTo("/AttributeQuery/Issuer/text()")
+    }
+
+    /**
+     * The 27 catalogue entries carrying a `regex` are the "missing element" errors — the commonest kind. They
+     * are reachable only if the parent resolves: the entry's `path` stops on a `transaction[…]` or an
+     * `item[…]` and the `regex` carries the absent child's name, which is why the truncation lines up.
+     *
+     * Here uid 52 / code 100, `regex = not.+patientpaid`: the amount charged to the patient is missing from
+     * the CGA transaction. And `value` must stay empty — the parent's `textContent` would be everything the
+     * transaction holds, which is neither the offending value nor ours to hand back.
+     */
+    @Test
+    fun aMissingElementResolvesItsParentAndCarriesNoValue() {
+        val request = SendTransactionRequest().apply {
+            kmehrmessage = Kmehrmessage().apply {
+                folders.add(FolderType().apply {
+                    transactions.add(TransactionType().apply {
+                        cds.add(CDTRANSACTION().apply {
+                            s = CDTRANSACTIONschemes.CD_TRANSACTION_MYCARENET
+                            sv = "1.0"
+                            value = "cga"
+                        })
+                        author = AuthorType().apply {
+                            hcparties.add(HcpartyType().apply {
+                                ids.add(IDHCPARTY().apply {
+                                    s = IDHCPARTYschemes.ID_HCPARTY
+                                    sv = "1.0"
+                                    value = "00000000000"
+                                })
+                            })
+                        }
+                    })
+                })
+            }
+        }
+        val marshalled = MarshallerHelper(SendTransactionRequest::class.java, SendTransactionRequest::class.java)
+            .toXMLByteArray(request)
+
+        val error = service.errorsOf(
+            listOf(
+                acknowledgeError(
+                    code = "100",
+                    scheme = CDERRORMYCARENETschemes.CD_ERROR,
+                    url = "/SendTransactionRequest/kmehrmessage/folder/transaction/not(*:patientpaid)"
+                )
+            ),
+            marshalled
+        ).single()
+
+        assertThat(error.uid).describedAs("the regex entry of the catalogue was reached").isEqualTo("52")
+        assertThat(error.msgFr).isEqualTo("Le  montant porté en compte au patient est manquant")
+        assertThat(error.path).isEqualTo("/SendTransactionRequest/kmehrmessage/folder/transaction[cga]")
+        assertThat(error.value)
+            .describedAs("the parent's whole text content is not the offending value")
+            .isNull()
+    }
+
     /** No error, or no acknowledged error list at all, is not an error. */
     @Test
     fun anAcknowledgementWithoutErrorsRendersNone() {

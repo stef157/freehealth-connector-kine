@@ -1423,6 +1423,40 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
     }
 
     /**
+     * The part of a location path that can actually be resolved.
+     *
+     * The CIN error tables name a *missing* element with a `not(…)` **step** — `/AttributeQuery/not(*:Issuer)`,
+     * verbatim in `MemberDataErrors.json`, entered from the CIN xpath column — and that is not valid XPath: a
+     * function cannot follow `/`. The catalogue already expects the shape to be handled by resolving the
+     * **parent** and matching the `not(…)` through the entry's own `regex`. Measured on all 27 `regex` entries
+     * of `eAttestErrors.json`: the name the regex captures (`patientpaid`, `claim`, `'date'`,
+     * `NIHDI-ID-DOC-MEDIA-TYPE`, …) is never the last step of the entry's `path`, which always stops on a
+     * `transaction[…]` or an `item[…]`. So the step is dropped here, and the `regex` keeps seeing the original
+     * url.
+     *
+     * `not(` is the only step dropped. A node type test — `text()`, `node()` — is legitimate in step position
+     * and stays. If the OAs send the predicate form `…[not(…)]` instead, there is no `not(` at step position
+     * and the path comes back unchanged: a safe superset under either hypothesis.
+     */
+    internal fun resolvableSteps(locationPath: String): String {
+        var depth = 0
+        var quote = ' '
+        var i = 0
+        while (i < locationPath.length) {
+            val c = locationPath[i]
+            when {
+                quote != ' ' -> if (c == quote) quote = ' '
+                c == '\'' || c == '"' -> quote = c
+                c == '[' || c == '(' -> depth++
+                c == ']' || c == ')' -> depth--
+                c == '/' && depth == 0 && locationPath.startsWith("/not(", i) -> return locationPath.substring(0, i)
+            }
+            i++
+        }
+        return locationPath
+    }
+
+    /**
      * The same location path, made independent of namespaces.
      *
      * MyCareNet names the offending node with an unprefixed path — or with the wildcard prefix `*:name`, the
@@ -1576,9 +1610,15 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             val result = mutableSetOf<MycarenetError>()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
 
+            // A `not(…)` step names a missing element; only its parent can be resolved. `value` then has to
+            // stay empty: the parent's textContent is the concatenation of everything it holds — SSIN, dates,
+            // amounts — which is neither the offending value nor ours to hand back.
+            val resolvableUrl = resolvableSteps(curratedUrl)
+            val namesAMissingElement = resolvableUrl != curratedUrl
+
             try {
                 val xpath = xPathFactory.newXPath()
-                val expr = xpath.compile(namespaceAgnostic(curratedUrl))
+                val expr = xpath.compile(namespaceAgnostic(resolvableUrl))
 
             (expr.evaluate(
                 builder.parse(ByteArrayInputStream(sendTransactionRequest)),
@@ -1586,7 +1626,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                           ) as NodeList).let { it ->
                 if (it.length > 0) {
                     var node = it.item(0)
-                    val textContent = node.textContent
+                    val textContent = if (namesAMissingElement) null else node.textContent
                     var base = "/" + nodeDescr(node)
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"
@@ -1610,6 +1650,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                   )
                     }
                 } else {
+                    log.warn("eattestv3: error $ec, unresolved location `$url\u00b4")
                     result.add(
                         MycarenetError(
                             code = ec,
@@ -1621,6 +1662,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                 }
             }
             } catch(e:Exception) {
+                log.warn("eattestv3: error $ec, uncompilable location `$url\u00b4", e)
                 result.add(
                     MycarenetError(
                         code = ec,

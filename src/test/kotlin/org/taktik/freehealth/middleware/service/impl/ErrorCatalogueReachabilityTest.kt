@@ -316,6 +316,14 @@ class ErrorCatalogueReachabilityTest {
             catalogue(name).mapNotNull { it.path }.count { it.endsWith("/#text") }
         }.filterValues { it > 0 })
             .containsOnly(entry("GenInsErrors", 21), entry("MemberDataErrors", 1))
+
+        // And an attribute step: `MemberDataErrors` is the only catalogue that indexes one, which is why
+        // only its `nodeDescr` carries the `@name` rule. The ten copies of `nodeDescr` legitimately differ
+        // — each describes its own schema's discriminators — so there is no shared place to put it.
+        assertThat(consulted.associateWith { name ->
+            catalogue(name).mapNotNull { it.path }.count { it.contains("@") }
+        }.filterValues { it > 0 })
+            .containsOnly(entry("MemberDataErrors", 11))
     }
 
     /**

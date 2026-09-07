@@ -114,6 +114,7 @@ import org.taktik.icure.cin.saml.oasis.names.tc.saml._2_0.assertion.SubjectConfi
 import org.taktik.icure.cin.saml.oasis.names.tc.saml._2_0.assertion.SubjectConfirmationDataType
 import org.taktik.icure.cin.saml.oasis.names.tc.saml._2_0.protocol.AttributeQuery
 import org.taktik.icure.cin.saml.oasis.names.tc.saml._2_0.protocol.Response
+import org.w3c.dom.Attr
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import org.w3c.dom.NodeList
@@ -923,6 +924,13 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                     else if (node.hasChildNodes() && node.childNodes.length > 1) ConnectorXmlUtils.toString(node)
                     else node.textContent
                     var base = "/" + nodeDescr(node)
+                    // A DOM attribute is not its element's child — it has no `parentNode`, only an
+                    // `ownerElement` — so the climb below would never run once and `base` would come out as
+                    // the bare attribute name, with no ancestry at all.
+                    (node as? Attr)?.ownerElement?.let { owner ->
+                        node = owner
+                        base = "/" + nodeDescr(owner) + base
+                    }
                     while (node.parentNode != null && node.parentNode is Element) {
                         base = "/${nodeDescr(node.parentNode)}$base"
                         node = node.parentNode
@@ -1047,6 +1055,13 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
     }
 
     private fun nodeDescr(node: Node): String {
+        // An attribute is written `@name`, with its prefix: that is how the catalogue indexes its eleven
+        // attribute entries — ten unprefixed (`@ID`, `@Format`, `@Method`, `@NotBefore`, `@NotOnOrAfter`)
+        // and uid 20 as `@xsi:type`. Elements keep the opposite rule below, prefix stripped, which is what
+        // their 47 paths are written as. Returning here also skips the `[id]` lookup, which an attribute
+        // cannot answer — `Attr.getAttributes()` is null.
+        if (node is Attr) return "@${node.nodeName}"
+
         val localName = node.localName ?: node.nodeName?.replace(Regex(".+?:(.+)"), "$1") ?: "unknown"
         val id = node.attributes?.getNamedItem("id")?.textContent
 

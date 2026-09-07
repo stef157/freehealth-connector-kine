@@ -366,6 +366,122 @@ class MemberDataErrorRenderingOfflineTest {
             .containsExactly(null)
     }
 
+    // ------------------------------------------------------------------ the attribute step
+
+    /**
+     * `MemberDataErrors.json` indexes **eleven** entries on an attribute, in `@name` notation — including
+     * uid 53, 54, 55 and 57 on `@NotBefore` / `@NotOnOrAfter`, the coverage window CLAUDE.md documents at
+     * length. So the catalogue side is attested; what the synchronous channel could not do was rebuild that
+     * notation.
+     *
+     * A DOM attribute has **no `parentNode`** — it is not its element's child but its `ownerElement` — so
+     * the climb in `extractError` never ran once, and `nodeDescr` wrote the local name with no marker:
+     * `base` came out as just `/Format`, losing both the ancestry and the `@`.
+     */
+    @Test
+    fun anAttributeStepReachesItsEntry() {
+        val errors = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            "urn:be:cin:nippin:SAML:status:AttributeQueryError",
+            "*:AttributeQuery/*:Subject/*:NameID/@Format",
+            "INVALID_NAMEID_FORMAT"
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("38")
+        assertThat(errors.single().path).isEqualTo("/AttributeQuery/Subject/NameID/@Format")
+        assertThat(errors.single().value)
+            .describedAs("the offending attribute of our own request")
+            .isEqualTo("urn:be:fgov:person:ssin")
+    }
+
+    /**
+     * The one that makes this worth doing: the coverage window. `getAttrQuery` writes the `date` and
+     * `endDate` query parameters into `SubjectConfirmationData/@NotBefore` and `@NotOnOrAfter`, and the
+     * catalogue indexes uid 53 to 57 on exactly those two attributes.
+     */
+    @Test
+    fun theCoverageWindowAttributesReachTheirEntries() {
+        fun at(attribute: String, detailCode: String) = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            "urn:be:cin:nippin:SAML:status:AttributeQueryError",
+            "*:AttributeQuery/*:Subject/*:SubjectConfirmation/*:SubjectConfirmationData/@$attribute",
+            detailCode
+        )
+
+        val startDate = at("NotBefore", "EMPTY_STARTDATE")
+        assertThat(startDate.map { it.uid }).containsExactly("53")
+        assertThat(startDate.single().path)
+            .isEqualTo("/AttributeQuery/Subject/SubjectConfirmation/SubjectConfirmationData/@NotBefore")
+        assertThat(startDate.single().value).isEqualTo("2021-08-25T02:00:00.000+02:00")
+
+        assertThat(at("NotOnOrAfter", "EMPTY_ENDDATE").map { it.uid }).containsExactly("54")
+    }
+
+    /**
+     * The guard on the climb this change touches: an **element** path must not move. uid 59
+     * `PERIOD_TOO_FAR_IN_PAST` sits on `SubjectConfirmationData` itself, and it is the one entry of the
+     * coverage-window family a real acceptance call has produced (CLAUDE.md, `date=20210101`).
+     */
+    @Test
+    fun anElementPathIsUnaffectedByTheAttributeRule() {
+        val errors = memberData.extractError(
+            attributeQuery,
+            "urn:oasis:names:tc:SAML:2.0:status:Requester",
+            "urn:be:cin:nippin:SAML:status:InputError",
+            "*:AttributeQuery/*:Subject/*:SubjectConfirmation/*:SubjectConfirmationData",
+            "PERIOD_TOO_FAR_IN_PAST"
+        )
+
+        assertThat(errors.map { it.uid }).containsExactly("59")
+        assertThat(errors.single().path)
+            .isEqualTo("/AttributeQuery/Subject/SubjectConfirmation/SubjectConfirmationData")
+    }
+
+    /**
+     * uid 20 is the one attribute of the eleven that is **prefixed**, `@xsi:type`, and it goes the opposite
+     * way from everything else in this batch: the **synchronous** channel renders it, the async one does not.
+     *
+     * Measured rather than predicted. Saxon does bind `xsi` in its default static context, so the location
+     * compiles and resolves even though `MemberDataServiceImpl` no longer sets a `NamespaceContext`; the
+     * attribute's `nodeName` is `xsi:type`, which is exactly what the entry carries. So the synchronous
+     * channel reaches **eleven of eleven**. The async overload strips every `:` from the location, turning
+     * `@xsi:type` into `@xsitype`, so it reaches ten and leaves this one in the fallback — the price of
+     * comparing textually, and the reason that stripping is not touched here.
+     */
+    @Test
+    fun thePrefixedAttributeIsRenderedOnTheSyncChannelOnly() {
+        val location = "*:AttributeQuery/*:Extensions/@xsi:type"
+        val code1 = "urn:oasis:names:tc:SAML:2.0:status:Requester"
+        val code2 = "urn:be:cin:nippin:SAML:status:AttributeQueryError"
+
+        val sync = memberData.extractError(attributeQuery, code1, code2, location, "MISSING_OR_BAD_EXTENSIONS_TYPE")
+        assertThat(sync.map { it.uid }).containsExactly("20")
+        assertThat(sync.single().path).isEqualTo("/AttributeQuery/Extensions/@xsi:type")
+
+        assertThat(memberData.extractError(code1, code2, location, "MISSING_OR_BAD_EXTENSIONS_TYPE").map { it.uid })
+            .describedAs("the `:` stripping makes it `@xsitype`; the fallback carries the code instead")
+            .containsExactly(null)
+    }
+
+    /**
+     * The async channel compares the location textually after stripping every `*` and `:`, which already
+     * produces the catalogue's `@name` notation — so ten of the eleven were reachable there while none was
+     * on the synchronous side. This guard measures that, and that it stays so.
+     */
+    @Test
+    fun theAsyncChannelAlreadyMatchedAnAttributeStep() {
+        assertThat(
+            memberData.extractError(
+                "urn:oasis:names:tc:SAML:2.0:status:Requester",
+                "urn:be:cin:nippin:SAML:status:AttributeQueryError",
+                "*:AttributeQuery/*:Subject/*:NameID/@Format",
+                "INVALID_NAMEID_FORMAT"
+            ).map { it.uid }
+        ).containsExactly("38")
+    }
+
     // ------------------------------------------------------------------ the async channel
 
     /**

@@ -773,9 +773,13 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
 
         ws.write("2", recordNumber)
 
+        // ET 80 Z 7 must repeat ET 20 Z 7: reject 800712 (nature F, the whole invoice), "Contenu different de
+        // celui dans l'ET 20 Z 7", carries NO exemption for the national unions 2, 4 and 5 - unlike 300712, 400712
+        // and 500712 on the service records. writeRecordHeader writes 000 for the prefixes 2, 4 AND 5; this footer
+        // only knew 2 and 5, so an OA 400 invoice left with ET 20 Z 7 = 000 and ET 80 Z 7 = 414.
         var affCode = insuranceCode
 
-        if (affCode.startsWith("2") || affCode.startsWith("5")) {
+        if (affCode.startsWith("2") || affCode.startsWith("4") || affCode.startsWith("5")) {
             affCode = "000"
         }
 

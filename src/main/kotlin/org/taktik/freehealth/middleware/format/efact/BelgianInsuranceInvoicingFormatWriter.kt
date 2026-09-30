@@ -188,7 +188,9 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("403", if (amount >= 0) "+" else "-")
         ws.write("404", Math.abs(amount))
         ws.write("4041", 0)
-        ws.write("405", "+")
+        // Account B is reserved to hospital institutions (920000 v02 r03, ZONE 405, control 15 "Zone # de blanc et
+        // emetteur ... # d'une institution hospitaliere"). This writer has no hospital sender: always blank.
+        ws.write("405", "")
         ws.write("406", 0)
         ws.write("4061", 0)
         ws.write("407", if (amount >= 0) "+" else "-")
@@ -229,7 +231,8 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("503", if (amount >= 0) "+" else "-")
         ws.write("504", Math.abs(amount))
         ws.write("5041", 0)
-        ws.write("505", "+")
+        // Same reservation as Z 405 (920000 v02 r03, ZONE 505, control 15): blank for a non-hospital sender.
+        ws.write("505", "")
         ws.write("506", 0)
         ws.write("5061", 0)
         ws.write("507", if (amount >= 0) "+" else "-")

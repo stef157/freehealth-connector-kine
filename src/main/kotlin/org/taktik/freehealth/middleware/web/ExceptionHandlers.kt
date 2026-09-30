@@ -72,6 +72,7 @@ class ExceptionHandlers {
      */
     private fun report(request: HttpServletRequest, exception: Exception, response: ResponseEntity<ExceptionDto>) {
         if (!Sentry.isEnabled() || !response.statusCode.is5xxServerError) return
+        if (callerMistakes.any { it.isInstance(exception) }) return
         Sentry.withScope { scope ->
             scope.setTag("route", request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) as? String ?: "unknown")
             scope.setTag("method", request.method)
@@ -90,5 +91,20 @@ class ExceptionHandlers {
 
     companion object {
         private val log = LoggerFactory.getLogger(ExceptionHandlers::class.java)
+
+        /**
+         * Request-binding failures answer 500 through [handleException] — a contract clients already see, kept as is —
+         * but they are the caller's mistake, not a server fault, and would flood the project FHC shares with the
+         * satellite.
+         */
+        private val callerMistakes = listOf(
+            org.springframework.web.bind.ServletRequestBindingException::class.java,
+            org.springframework.web.multipart.MultipartException::class.java,
+            org.springframework.web.multipart.support.MissingServletRequestPartException::class.java,
+            org.springframework.beans.TypeMismatchException::class.java,
+            org.springframework.http.converter.HttpMessageNotReadableException::class.java,
+            org.springframework.web.HttpMediaTypeException::class.java,
+            org.springframework.web.HttpRequestMethodNotSupportedException::class.java
+        )
     }
 }

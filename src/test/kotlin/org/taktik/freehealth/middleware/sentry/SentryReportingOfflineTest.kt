@@ -26,11 +26,10 @@ class SentryReportingOfflineTest {
     @Before
     fun startSentry() {
         Sentry.init { options: SentryOptions ->
-            options.dsn = "https://public@localhost/1"
-            options.isSendDefaultPii = false
-            options.maxBreadcrumbs = 0
-            options.beforeSend = SentryOptions.BeforeSendCallback { event, _ ->
-                sent.add(SentryScrubber.scrub(event))
+            SentryConfiguration.configure(options, "https://public@localhost/1", "test", "0.0.0")
+            val shipped = options.beforeSend!!
+            options.beforeSend = SentryOptions.BeforeSendCallback { event, hint ->
+                shipped.execute(event, hint)?.let { sent.add(it) }
                 null
             }
         }
@@ -76,6 +75,27 @@ class SentryReportingOfflineTest {
 
         assertThat(sent).hasSize(1)
         assertThat(sent.single().getTag("status")).isEqualTo("502")
+    }
+
+    @Test
+    fun aValueQuotedByXsdValidationIsScrubbed() {
+        handlers.handleException(request("/efact/flat", "/efact/flat"), RuntimeException(
+            "XML could not be validated against XSD. cvc-pattern-valid: Value 'Dupont Marie' is not facet-valid"))
+
+        assertThat(sent.single().exceptions!!.single().value)
+            .isEqualTo("XML could not be validated against XSD. cvc-pattern-valid: Value '[value]' is not facet-valid")
+        assertThat(sent.single().getTag("component")).isEqualTo("fhc")
+    }
+
+    @Test
+    fun aBindingFailureAnswers500ButStaysOut() {
+        val response = handlers.handleException(request("/mda/11111111111", "/mda/{ssin}"),
+            org.springframework.web.bind.MissingRequestHeaderException("X-FHC-tokenId",
+                org.springframework.core.MethodParameter(
+                    SentryReportingOfflineTest::class.java.getDeclaredMethod("startSentry"), -1)))
+
+        assertThat(response.statusCode.value()).isEqualTo(500)
+        assertThat(sent).isEmpty()
     }
 
     @Test

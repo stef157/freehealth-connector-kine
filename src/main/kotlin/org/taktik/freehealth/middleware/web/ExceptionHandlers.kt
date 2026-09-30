@@ -1,9 +1,12 @@
 package org.taktik.freehealth.middleware.web
 
+import io.sentry.Sentry
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.servlet.HandlerMapping
 import org.taktik.connector.technical.exception.SoaErrorException
 import org.taktik.connector.technical.exception.TechnicalConnectorException
 import org.taktik.freehealth.middleware.exception.MissingKeystoreException
@@ -24,6 +27,7 @@ class ExceptionHandlers {
     @ExceptionHandler(TechnicalConnectorException::class)
     fun handleTechnicalConnectorException(request: HttpServletRequest, exception: TechnicalConnectorException) =
             ExceptionDto(exception.category.httpStatus, exception, request.servletPath).toResponseEntity()
+                .also { report(request, exception, it) }
 
     /**
      * SoaErrorException only carries the eHealth status code in its message, while the reason why the platform
@@ -38,7 +42,7 @@ class ExceptionHandlers {
                 exception.category.httpStatus.reasonPhrase,
                 listOfNotNull(exception.message, statusMessageOf(exception)).joinToString(" - "),
                 request.servletPath
-            ).toResponseEntity()
+            ).toResponseEntity().also { report(request, exception, it) }
 
     @ExceptionHandler(MissingKeystoreException::class, MissingTokenException::class, UnauthorizedException::class)
     fun handleUnauthorizedException(request: HttpServletRequest, exception: Exception) =
@@ -51,6 +55,7 @@ class ExceptionHandlers {
     @ExceptionHandler(SOAPFaultException::class)
     fun handleSoapFaultException(request: HttpServletRequest, exception: SOAPFaultException) =
             ExceptionDto(HttpStatus.BAD_GATEWAY, exception, request.servletPath).toResponseEntity()
+                .also { report(request, exception, it) }
 
     @ExceptionHandler(EOFException::class)
     fun handleEOFException(request: HttpServletRequest, exception: EOFException) = null //Nothing more to do... Connection closed
@@ -59,6 +64,21 @@ class ExceptionHandlers {
     fun handleException(request: HttpServletRequest, exception: Exception) =
             ExceptionDto(HttpStatus.INTERNAL_SERVER_ERROR, exception, request.servletPath).toResponseEntity()
                 .also { log.error("Unhandled exception on ${request.servletPath}", exception) }
+                .also { report(request, exception, it) }
+
+    /**
+     * Sends server errors to Sentry, once each; 4xx are the caller's mistake and stay out. The route is tagged by
+     * its template (`/mda/{ssin}`), never by the path that was called, which may carry the SSIN.
+     */
+    private fun report(request: HttpServletRequest, exception: Exception, response: ResponseEntity<ExceptionDto>) {
+        if (!Sentry.isEnabled() || !response.statusCode.is5xxServerError) return
+        Sentry.withScope { scope ->
+            scope.setTag("route", request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) as? String ?: "unknown")
+            scope.setTag("method", request.method)
+            scope.setTag("status", response.statusCode.value().toString())
+            Sentry.captureException(exception)
+        }
+    }
 
     private fun statusMessageOf(exception: SoaErrorException): String? = try {
         (exception.responseTypeV2 as? StatusResponseType)?.status?.statusMessage

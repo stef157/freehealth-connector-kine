@@ -270,6 +270,18 @@ start time), `diskSpace`, `hazelcast`, `ssl` and `ping`. That nesting comes from
 Spring-side config is `src/main/resources/application.properties` (port 8090, `spring.application.name=fhc`) plus
 `icure.hazelcast.*` and CouchDB properties for the admin/login side.
 
+### Sentry
+
+`sentry/SentryConfiguration.kt` starts the plain `io.sentry:sentry` SDK (**not** the Spring Boot starter, which
+would ship the request) when `SENTRY_DSN` is set, and logs `Sentry disabled: no SENTRY_DSN` otherwise; the DSN
+lives in kine-data's `deploy/fhc/.env` (`FHC_SENTRY_DSN`), never in this public repo. Events go to
+`fisco/kinedesk-satellite` (DE region), tagged `component=fhc`. Only `ExceptionHandlers` reports, and only
+**5xx** — 4xx and 401 stay out — tagged with the route **template** (`/mda/{ssin}`), method and status.
+`SentryScrubber` drops request, user, breadcrumbs and extras, and rewrites every exception message in the cause
+chain: UUIDs → `[uuid]`, formatted SSIN and any run of 8+ digits → `[digits]`. Environment is derived from
+`endpoint.sts` (`-acpt` → `acceptance`), `SENTRY_ENVIRONMENT` overrides. `SentryReportingOfflineTest` pins all
+of it. No tracing: transaction names would come from URIs.
+
 ### MyCareNet / CIN licence
 
 Every MyCareNet domain needs a CIN licence (a username + password pair). Services resolve it in this order

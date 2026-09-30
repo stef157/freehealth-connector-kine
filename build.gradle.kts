@@ -193,6 +193,9 @@ dependencies {
 
     implementation("org.json:json:20231013")
 
+    // Plain SDK on purpose, not the Spring Boot starter: nothing about the request leaves unless SentryConfiguration puts it there
+    implementation("io.sentry:sentry:8.58.0")
+
     implementation("org.slf4j:log4j-over-slf4j")
     implementation("com.taktik.boot:spring-boot-starter-gke-logging:3.4.34-g3238a3228e")
 

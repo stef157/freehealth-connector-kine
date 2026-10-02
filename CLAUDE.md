@@ -777,6 +777,13 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   `MemberData`/`memberdatav2`, `Mediprima`/`mediprimav2`/`mediprimaUma`. A fix usually belongs in one specific
   version — check which one the caller uses before touching all of them.
 - JSON dates are serialized as `yyyyMMdd` / `yyyyMMddHHmmss` **numbers** (`MapperConfiguration.kt`), not ISO strings.
+- **A per-endpoint timeout key is suffixed with the last two segments of the endpoint URL**
+  (`ConnectionTimeOutHandler.endpointProperty`): `…/GenAsync/eagreement` reads
+  `connector.soaphandler.connection.request.timeout.GenAsync.eagreement`. A key matching no endpoint is ignored
+  silently and the default **60 s** applies — which is what the GenAsync keys, written `generic.<domain>`, did until
+  10/2026 (Sentry KINEDESK-SATELLITE-5), and what upstream's switch of invoicing to `hcpfac_12` did to eFact's.
+  `ConnectionTimeOutHandlerOfflineTest` checks the four shipped files, so an endpoint URL changed without its key
+  turns it red.
 - `genJaxb` exists in `build.gradle.kts` but is dormant (its dependencies are commented out); JAXB classes are
   committed.
 - **springdoc / OpenAPI 3**: `@Tag` on the controller class, `@Operation(summary, description)` on the method,

@@ -16,9 +16,7 @@ public class ConnectionTimeOutHandler extends AbstractSOAPHandler {
    private Configuration config = ConfigFactory.getConfigValidator();
 
    public boolean handleOutbound(SOAPMessageContext context) {
-      String endpoint = (String) context.get("jakarta.xml.ws.service.endpoint.address");
-      String[] parts = endpoint != null ? endpoint.split("/+") : null;
-      String endpointProperty = (parts != null && parts.length>=4) ? parts[parts.length-2] + "." + parts[parts.length-1] : null;
+      String endpointProperty = endpointProperty((String) context.get("jakarta.xml.ws.service.endpoint.address"));
 
       String requestTimeOut = this.getDuration(REQUEST_TIMEOUT_PROP, endpointProperty);
       LOG.debug("Setting request timeout on: {} milliseconds.", requestTimeOut);
@@ -30,6 +28,16 @@ public class ConnectionTimeOutHandler extends AbstractSOAPHandler {
       context.put(CONNECT_TIMEOUT, connectTimeOut);
       context.put(CONNECT_TIMEOUT_PROP, connectTimeOut);
       return true;
+   }
+
+   /**
+    * Suffix of the per-endpoint timeout keys: the last two segments of the endpoint URL, e.g.
+    * {@code …/GenAsync/eagreement} → {@code GenAsync.eagreement}. A key whose suffix no endpoint produces is silently
+    * ignored and the default applies.
+    */
+   static String endpointProperty(String endpoint) {
+      String[] parts = endpoint != null ? endpoint.split("/+") : null;
+      return (parts != null && parts.length>=4) ? parts[parts.length-2] + "." + parts[parts.length-1] : null;
    }
 
    private String getDuration(String timeoutProp, String endpointProperty) {

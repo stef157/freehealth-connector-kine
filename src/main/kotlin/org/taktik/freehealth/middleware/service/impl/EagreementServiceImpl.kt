@@ -532,6 +532,9 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
 
         val getHeader = WsAddressingHeader(URI("urn:be:cin:nip:async:generic:get:query")).apply {
             messageID = URI(IdGeneratorFactory.getIdGenerator("uuid").generateId())
+            // CIN genericAsync catalogue §3.3.6: "Even if the Ws-addressing "To" header is required, its
+            // value may be left empty." The handler writes <wsa:To/> for any non-null URI.
+            to = URI("")
         }
         val replyToEtk = extractEtk(credential)?.encoded
 
@@ -542,8 +545,8 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 // ONE message per get. eAgreement responses are encryptedForKnownRecipient, and the CIN
                 // genericAsync catalogue (§3.3.6, MsgQuery) sets the default to "1" when encrypted content
                 // is possible -- "Use 1 to download the messages sequentially" -- and warns ("Encryption and
-                // timeout") that encrypting large batches may delay the get significantly. With 100, every
-                // get since 02/10/2026 ended in a 502 from the MyCareNet gateway after ~105 s.
+                // timeout") that encrypting large batches may delay the get significantly. Conformance, not
+                // a cure: measured on 04/10/2026, Max=1 did not lift the 502 seen since 02/10.
                 max = 1
                 this.messageNames.addAll(
                     listOf(
@@ -551,9 +554,12 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     )
                 )
             }
+            // No tACK requested. eAgreement requests go out synchronously (askAgreement & co. on the eHealth
+            // web service), never through the GenAsync post, so this channel has no tACK of ours to fetch.
+            // Requesting them anyway meant repeated gets without the confirm the catalogue requires
+            // ("Repetitive call limitation", §3.3.6); @Include=false is the documented way to ask for none.
             tAckQuery = Query().apply {
-                isInclude = true
-                max = 100
+                isInclude = false
             }
             origin = buildOriginType(hcpNihii, hcpFirstName, "physiotherapist", hcpSsin)
         }

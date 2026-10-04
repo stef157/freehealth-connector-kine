@@ -13,6 +13,11 @@ import org.mockito.Mockito.mock
 import org.taktik.connector.technical.service.keydepot.KeyDepotService
 import org.taktik.freehealth.middleware.service.impl.EagreementServiceImpl
 import java.io.File
+import java.net.URI
+import jakarta.xml.soap.MessageFactory
+import jakarta.xml.soap.SOAPHeader
+import org.taktik.connector.technical.handler.WsAddressingHandlerV200508
+import org.taktik.connector.technical.handler.domain.WsAddressingHeader
 import java.io.StringReader
 import java.io.StringWriter
 import javax.xml.XMLConstants
@@ -43,6 +48,14 @@ class EagreementGetConformityOfflineTest {
 
     /** The block of `getMessages` this test reproduces, whitespace-normalised. */
     private val copiedBlock = """
+        val getHeader = WsAddressingHeader(URI("urn:be:cin:nip:async:generic:get:query")).apply {
+            messageID = URI(IdGeneratorFactory.getIdGenerator("uuid").generateId())
+            // CIN genericAsync catalogue §3.3.6: "Even if the Ws-addressing "To" header is required, its
+            // value may be left empty." The handler writes <wsa:To/> for any non-null URI.
+            to = URI("")
+        }
+        val replyToEtk = extractEtk(credential)?.encoded
+
         val get = Get().apply {
             this.replyToEtk = replyToEtk
             msgQuery = MsgQuery().apply {
@@ -50,8 +63,8 @@ class EagreementGetConformityOfflineTest {
                 // ONE message per get. eAgreement responses are encryptedForKnownRecipient, and the CIN
                 // genericAsync catalogue (§3.3.6, MsgQuery) sets the default to "1" when encrypted content
                 // is possible -- "Use 1 to download the messages sequentially" -- and warns ("Encryption and
-                // timeout") that encrypting large batches may delay the get significantly. With 100, every
-                // get since 02/10/2026 ended in a 502 from the MyCareNet gateway after ~105 s.
+                // timeout") that encrypting large batches may delay the get significantly. Conformance, not
+                // a cure: measured on 04/10/2026, Max=1 did not lift the 502 seen since 02/10.
                 max = 1
                 this.messageNames.addAll(
                     listOf(
@@ -59,9 +72,12 @@ class EagreementGetConformityOfflineTest {
                     )
                 )
             }
+            // No tACK requested. eAgreement requests go out synchronously (askAgreement & co. on the eHealth
+            // web service), never through the GenAsync post, so this channel has no tACK of ours to fetch.
+            // Requesting them anyway meant repeated gets without the confirm the catalogue requires
+            // ("Repetitive call limitation", §3.3.6); @Include=false is the documented way to ask for none.
             tAckQuery = Query().apply {
-                isInclude = true
-                max = 100
+                isInclude = false
             }
             origin = buildOriginType(hcpNihii, hcpFirstName, "physiotherapist", hcpSsin)
         }
@@ -95,11 +111,27 @@ class EagreementGetConformityOfflineTest {
                 this.messageNames.addAll(listOf("eAgreement-response"))
             }
             tAckQuery = Query().apply {
-                isInclude = true
-                max = 100
+                isInclude = false
             }
             this.origin = origin
         }
+    }
+
+    @Test
+    fun theHandlerWritesAnEmptyWsaTo() {
+        val header = WsAddressingHeader(URI("urn:be:cin:nip:async:generic:get:query")).apply {
+            messageID = URI("urn:uuid:00000000-0000-0000-0000-000000000000")
+            to = URI("")
+        }
+        val soap = MessageFactory.newInstance().createMessage()
+        WsAddressingHandlerV200508::class.java
+            .getDeclaredMethod("processOptionalElements", WsAddressingHeader::class.java, SOAPHeader::class.java)
+            .apply { isAccessible = true }
+            .invoke(WsAddressingHandlerV200508(), header, soap.soapHeader)
+
+        val to = soap.soapHeader.getElementsByTagNameNS("http://www.w3.org/2005/08/addressing", "To")
+        assertThat(to.length).isEqualTo(1)
+        assertThat(to.item(0).textContent).isEmpty()
     }
 
     private fun marshal(get: Get): String = StringWriter().also {
@@ -132,9 +164,9 @@ class EagreementGetConformityOfflineTest {
         val schema = factory.newSchema(xsd)
         schema.newValidator().validate(StreamSource(StringReader(xml)))
 
-        // One encrypted message per get (catalogue §3.3.6); the tACK query keeps its own cap.
+        // One encrypted message per get (catalogue §3.3.6), and no tACK requested at all.
         assertThat(normalise(xml)).contains(normalise("<ns2:MsgQuery Include=\"true\"> <ns2:Max>1</ns2:Max>"))
-        assertThat(normalise(xml)).contains(normalise("<ns2:TAckQuery Include=\"true\"> <ns2:Max>100</ns2:Max>"))
+        assertThat(normalise(xml)).contains("<ns2:TAckQuery Include=\"false\"/>")
     }
 }
 

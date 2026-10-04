@@ -539,7 +539,12 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             this.replyToEtk = replyToEtk
             msgQuery = MsgQuery().apply {
                 isInclude = true
-                max = 100
+                // ONE message per get. eAgreement responses are encryptedForKnownRecipient, and the CIN
+                // genericAsync catalogue (§3.3.6, MsgQuery) sets the default to "1" when encrypted content
+                // is possible -- "Use 1 to download the messages sequentially" -- and warns ("Encryption and
+                // timeout") that encrypting large batches may delay the get significantly. With 100, every
+                // get since 02/10/2026 ended in a 502 from the MyCareNet gateway after ~105 s.
+                max = 1
                 this.messageNames.addAll(
                     listOf(
                         "eAgreement-response"

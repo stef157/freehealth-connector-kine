@@ -243,6 +243,25 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
         }
     }
 
+    fun patientIdentifier(patientSsin: String?, io: String?, ioMembership: String?): Identifier = Identifier().apply {
+        when {
+            !patientSsin.isNullOrEmpty() -> {
+                system = CodingSystemEnum.SSIN.codingSystem
+                value = patientSsin
+            }
+            !ioMembership.isNullOrEmpty() && !io.isNullOrEmpty() -> {
+                system = CodingSystemEnum.INSURANCY_MEMBERSHIP.codingSystem
+                value = ioMembership
+            }
+        }
+        if (!io.isNullOrEmpty() && (!patientSsin.isNullOrEmpty() || !ioMembership.isNullOrEmpty())) {
+            assigner = Reference(identifier = Identifier().apply {
+                system = CodingSystemEnum.INSURANCE_NUMBER.codingSystem
+                value = io
+            })
+        }
+    }
+
     override fun getPatient(patientFirstName: String, patientLastName: String, gender: String, patientSsin: String?, io: String ?, ioMembership: String?): Patient {
         return Patient(
             id = "Patient1",
@@ -250,30 +269,15 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
                 profile = listOf(MetaProfileEnum.BE_PATIENT.metaProfile)
             ),
             identifier = listOf(
-                Identifier().apply {
-                    when{
-                        !patientSsin.isNullOrEmpty() && ioMembership.isNullOrEmpty() -> {
-                            system = CodingSystemEnum.SSIN.codingSystem
-                            value = patientSsin
-                        }
-                        patientSsin.isNullOrEmpty() && !ioMembership.isNullOrEmpty() && !io.isNullOrEmpty() -> {
-                            system = CodingSystemEnum.INSURANCY_MEMBERSHIP.codingSystem
-                            value = ioMembership
-                            assigner = Reference(identifier = Identifier().apply {
-                                system = CodingSystemEnum.INSURANCE_NUMBER.codingSystem
-                                value = io
-                            })
-                        }
-                        !patientSsin.isNullOrEmpty() && !ioMembership.isNullOrEmpty() -> {
-                            system = CodingSystemEnum.INSURANCY_MEMBERSHIP.codingSystem
-                            value = ioMembership
-                            assigner = Reference(identifier = Identifier().apply {
-                                system = CodingSystemEnum.INSURANCE_NUMBER.codingSystem
-                                value = io
-                            })
-                        }
-                    }
-                }),
+                // CIN "3-EN-DATA-EAGR-KINE" (eAgreement kine space, sheet TECH_Sync Requests, updated
+                // 2021-12-23, rows 76-83): identifier.value is "Either SSIN, or the patient mutuality
+                // registration number"; identifier.assigner (the mutuality number) is 0..1 for ask, extend,
+                // complete, cancel and consult, and **1 for argue** — "Only if the patient mutuality
+                // registration number or SSIN is given". The SSIN prevails when given, and the insurer, when
+                // the caller gives one, travels as assigner in both forms. It used to be dropped next to an
+                // SSIN, and an SSIN given with a registration number was replaced by the latter.
+                patientIdentifier(patientSsin, io, ioMembership)
+            ),
             name = listOf(
                 HumanName(
                     family = patientLastName,

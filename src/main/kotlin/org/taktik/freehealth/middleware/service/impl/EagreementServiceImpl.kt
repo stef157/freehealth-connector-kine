@@ -104,6 +104,33 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
     companion object {
         /** Value the CIN message definition mandates for the Detail's MessageVersion attribute (eAgreement v2). */
         const val MESSAGE_VERSION = "V4"
+
+        /**
+         * Routing reference date, per the CIN "Routing rules (kinés) V1.0" (12/07/2023, map "Routing mutations
+         * accords"): claim-ask and claim-extend use MIN(requested start date; today) — a request for a period
+         * that began before a change of insurer must reach the former insurer. Every other operation uses today
+         * (consult, complete; our cancel only targets an agreement that has not started yet, so MIN is today).
+         */
+        @JvmStatic
+        fun routingReferenceDate(messageEventCode: String, agreementStartDate: DateTime?, now: DateTime): DateTime =
+            if ((messageEventCode == "claim-ask" || messageEventCode == "claim-extend") &&
+                agreementStartDate != null && agreementStartDate.isBefore(now)
+            ) agreementStartDate else now
+
+        /**
+         * Routing care receiver. The insurer is set whenever the caller gives one — with a registration number,
+         * or with the SSIN alone: the routing rules use "NISS + N° mut" to by-pass the intermutualist filter for
+         * claim-argue (towards the insurer that issued the WFI). It used to be set only with a registration
+         * number, so an insurer given with an SSIN was silently dropped. The caller decides when to give one
+         * (Kiné-Desk: never with an SSIN, except for argue).
+         */
+        @JvmStatic
+        fun careReceiverFor(ssin: String?, io: String?, membership: String?): CareReceiverIdType =
+            CareReceiverIdType().apply {
+                ssin?.let { this.ssin = it }
+                io?.let { mutuality = it }
+                membership?.let { regNrWithMut = it }
+            }
     }
 
     enum class RequestTypeEnum(val requestType: String) {
@@ -259,18 +286,10 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     }
                 }
                 routing = RoutingType().apply {
-                    careReceiver = CareReceiverIdType().apply {
-                        patientSsin?.let {
-                            ssin = patientSsin
-                        }
-                        patientIoMembership?.let {
-                            mutuality = patientIo
-                            regNrWithMut = patientIoMembership
-                        }
-                    }
+                    careReceiver = careReceiverFor(patientSsin, patientIo, patientIoMembership)
                     // v4 types referenceDate as XMLGregorianCalendar, unlike v3's joda DateTime
                     referenceDate = GregorianCalendar().let { cal ->
-                        cal.time = DateTime().toDate()
+                        cal.time = routingReferenceDate(messageEventCode, agreementStartDate, DateTime()).toDate()
                         DatatypeFactory.newInstance().newXMLGregorianCalendar(cal)
                     }
                 }
@@ -450,16 +469,9 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     }
                 }
                 routing = RoutingType().apply {
-                    careReceiver = CareReceiverIdType().apply {
-                        patientSsin?.let {
-                            ssin = patientSsin
-                        }
-                        patientIoMembership?.let {
-                            mutuality = patientIo
-                            regNrWithMut = patientIoMembership
-                        }
-                    }
-                    // v4 types referenceDate as XMLGregorianCalendar, unlike v3's joda DateTime
+                    careReceiver = careReceiverFor(patientSsin, patientIo, patientIoMembership)
+                    // v4 types referenceDate as XMLGregorianCalendar, unlike v3's joda DateTime.
+                    // Consult: « Date du jour » (CIN routing rules kiné V1.0).
                     referenceDate = GregorianCalendar().let { cal ->
                         cal.time = DateTime().toDate()
                         DatatypeFactory.newInstance().newXMLGregorianCalendar(cal)

@@ -13,6 +13,7 @@ import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.web.servlet.HandlerMapping
 import org.taktik.freehealth.middleware.exception.MissingTokenException
 import org.taktik.freehealth.middleware.web.ExceptionHandlers
+import org.taktik.freehealth.utils.AsyncPayloadDecodingException
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -106,5 +107,17 @@ class SentryReportingOfflineTest {
             MissingTokenException("no token"))
 
         assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun anAsyncMessageThatCannotBeDecodedIsSentAlthoughTheCallAnswers200() {
+        SentryReporter.asyncDecodingFailure("mda-async", "unmarshal ResponseList", AsyncPayloadDecodingException(
+            "unmarshal ResponseList", "3c 3f 78 6d 6c (120 bytes)", IllegalStateException("unexpected NameID 11111111111")))
+
+        val event = sent.single()
+        assertThat(event.getTag("channel")).isEqualTo("mda-async")
+        assertThat(event.getTag("stage")).isEqualTo("unmarshal ResponseList")
+        assertThat(event.getTag("component")).isEqualTo("fhc")
+        assertThat(event.exceptions!!.map { it.value }).allSatisfy { assertThat(it).doesNotContain("11111111111") }
     }
 }

@@ -68,6 +68,7 @@ import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetError
 import org.taktik.freehealth.middleware.exception.MissingTokenException
 import org.taktik.freehealth.middleware.exception.UnauthorizedException
 import org.taktik.freehealth.middleware.service.EagreementService
+import org.taktik.freehealth.middleware.sentry.SentryReporter
 import org.taktik.freehealth.middleware.service.STSService
 import org.taktik.freehealth.middleware.web.controllers.EagreementController
 import org.taktik.freehealth.utils.AsyncPayloadDecoder
@@ -659,6 +660,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                         )
                     } catch (e: Exception) {
                         val stage = (e as? AsyncPayloadDecodingException)?.stage ?: "map response"
+                        SentryReporter.asyncDecodingFailure("eagreement-async", stage, e)
                         log.error("Cannot decode eAgreement async message reference=${msgResponse.detail?.reference} messageName=${msgResponse.detail?.messageName} contentType=${msgResponse.detail?.contentType} contentEncoding=${msgResponse.detail?.contentEncoding} contentEncryption=${msgResponse.detail?.contentEncryption} nipReference=${msgResponse.commonOutput?.nipReference} at stage [$stage], payload head: ${(e as? AsyncPayloadDecodingException)?.payloadHead}", e)
                         EAgreementMessage(
                             commonOutput = CommonOutput(

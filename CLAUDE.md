@@ -97,8 +97,10 @@ its `/api/index.html` / `/v2/api-docs` are gone.
 
 ### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
 
-**On 02/10/2026 upstream renamed that branch `main` and made it its default branch**; `upstream/master` stopped
-moving on 24/09. Sync from **`upstream/main`** (merged up to `c6b1b9180` in `7a54e8f58`).
+**On 02/10/2026 upstream renamed that branch `main` and made it its default branch.** Sync from
+**`upstream/main`** (merged up to `c6b1b9180` in `7a54e8f58`) — **and still watch `upstream/master`**: it was
+thought dead since 24/09, yet PR #120 landed there on 05/10/2026 and not on `main` (merged up to `b055d6883`
+in `b31cf2201`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
 
 The migration merged upstream's branch, which had forked **before** the current master and was five months stale: it
 was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-15407. Merging it *into* our master
@@ -283,6 +285,12 @@ would ship the request) when `SENTRY_DSN` is set, and logs `Sentry disabled: no 
 lives in kine-data's `deploy/fhc/.env` (`FHC_SENTRY_DSN`), never in this public repo. Events go to
 `fisco/kinedesk-satellite` (DE region), tagged `component=fhc`. `ExceptionHandlers` reports **5xx** only — 4xx,
 401 and the request-binding failures that answer 500 (missing header or parameter, multipart…) stay out — tagged with the route **template** (`/mda/{ssin}`), method and status.
+**One capture sits outside `ExceptionHandlers`**: since upstream PR #120 an async MDA or eAgreement message that
+cannot be decoded no longer fails the call — it comes back as one entry carrying `genericErrors` =
+`DECODING_ERROR` among the readable ones, HTTP 200 — so `SentryReporter.asyncDecodingFailure` reports it from the
+two `catch` blocks, tagged `channel` (`mda-async` / `eagreement-async`) and `stage` (the decoding step that
+failed). That entry still carries its `reference`: **a client that confirms everything it receives acknowledges
+the unreadable message and loses it.**
 `SentryScrubber` drops request, user, breadcrumbs and extras, and rewrites every exception message in the cause
 chain: quoted segments → `'[value]'` (XSD validation quotes the offending value), UUIDs → `[uuid]`, formatted SSIN
 and any run of 8+ digits → `[digits]`. The SDK's default uncaught-exception handler also reports, through the same

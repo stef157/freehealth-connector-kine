@@ -100,6 +100,7 @@ import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetError
 import org.taktik.freehealth.middleware.exception.MissingTokenException
 import org.taktik.freehealth.middleware.exception.UnauthorizedException
 import org.taktik.freehealth.middleware.service.MemberDataService
+import org.taktik.freehealth.middleware.sentry.SentryReporter
 import org.taktik.freehealth.middleware.service.STSService
 import org.taktik.freehealth.utils.AsyncPayloadDecoder
 import org.taktik.freehealth.utils.AsyncPayloadDecodingException
@@ -427,6 +428,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                         )
                     } catch (e: Exception) {
                         val stage = (e as? AsyncPayloadDecodingException)?.stage ?: "map response"
+                        SentryReporter.asyncDecodingFailure("mda-async", stage, e)
                         log.error("Cannot decode MDA async message reference=${it.detail?.reference} messageName=${it.detail?.messageName} contentType=${it.detail?.contentType} contentEncoding=${it.detail?.contentEncoding} contentEncryption=${it.detail?.contentEncryption} nipReference=${it.commonOutput?.nipReference} at stage [$stage], payload head: ${(e as? AsyncPayloadDecodingException)?.payloadHead}", e)
                         MemberDataMessage(
                             commonOutput = CommonOutput(

@@ -320,7 +320,14 @@ file. So: authenticated user › `-D` system property › properties file.
    `freehealth.authentication.mcn-license` / `.mcn-password` for the single configured user.
 
 The CIN ties the licence to a registered package name — `package.name=Freehealth-Connector` / `package.id=fhc`
-(line 236). A mismatch gets calls rejected even with valid credentials. `apb.license.*` and `ftm.license.*` (pharmacy,
+(line 236). A mismatch gets calls rejected even with valid credentials.
+
+**A forgotten licence is visible at boot.** `CinLicenceHealthIndicator` logs a WARN at startup
+(`CIN licence missing…`, `package.name is still the connector's default…`) and reports
+`cinLicence.details` in `/actuator/health`: `licence` = `configured|missing`, `packageName` = `custom|default`.
+The status stays **UP** (the licence may come from the user) and no value is reported, the endpoint being
+unauthenticated. It reads `ConfigValidator.getProperty(key)` — **never the two-argument form**, whose default is
+resolved as another key: `getProperty(k, "")` throws `key can't be empty` on an absent key. `apb.license.*` and `ftm.license.*` (pharmacy,
 `prod` only) are separate licences and are **not** used in this deployment.
 
 ### Calling eAttest v3 (verified against acceptance)

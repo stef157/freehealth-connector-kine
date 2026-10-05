@@ -46,7 +46,7 @@ class Record80AffiliationZoneTest {
     private fun record80Zone7(insuranceCode: String): String {
         val sw = StringWriter()
         BelgianInsuranceInvoicingFormatWriter(sw).writeRecordFooter(
-            4, sender(), 1L, "REF1", patient(), insuranceCode, listOf(560011L), 2539L, 3164L, 0L,
+            4, sender(), 1L, InvoicingTreatmentReasonCode.Other, "REF1", patient(), insuranceCode, listOf(560011L), 2539L, 3164L, 0L,
             false, null, null, null
         )
         val zd = Record80Description.zoneDescriptionsByZone["7"]!!

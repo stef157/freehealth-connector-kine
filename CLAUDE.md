@@ -692,6 +692,12 @@ A reproduction — the two payloads, the two flat files, their sha256, a one-com
 note citing the annexe — sits in `out/et52-z15-repro/` (untracked, `.gitignore:11:out/`; it carries NISS). Its
 archived `B-substitute-provider.flat` is the *pre-fix* output and no longer matches what the writer produces.
 
+**ET 80 Z 17 repeats ET 20 Z 17** — reject `801712`, nature F, *"Contenu différent de celui dans l'ET 20 Z 17"*.
+The footer did not write the zone at all, so it went out as `0000`: right by accident for `reason = Other`, which
+is all kine-data sends today, and a rejected invoice for any other reason. Verbatim in `upstream/main`; the fix was
+read in Rosa's fork (upstream PR #119). `OtherAccident(90)` joins the enum, `801703` listing 0050, 0060, 0070,
+0080, 0090 and 0000 as the authorised values. `Record80TreatmentReasonTest` holds it.
+
 **`InvoiceSender.isMedicalHouse` is not a settable flag**, despite being a `var`: its getter is computed from the
 NIHII (starts with `8`, last three digits in a published list), so assigning it does nothing. A test fixture that
 sets it is testing the non-medical-house branch.

@@ -750,6 +750,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
     fun writeRecordFooter(recordNumber: Int,
                           sender: InvoiceSender,
                           invoiceNumber: Long?,
+                          treatmentReason: InvoicingTreatmentReasonCode,
                           invoiceRef: String,
                           patient: Patient,
                           insuranceCode: String,
@@ -798,6 +799,9 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("10", 3)
         ws.write("14", sender.nihii.toString().padEnd(11, '0'))
         ws.write("15", "+00000000000")
+        // ET 80 Z 17 must repeat ET 20 Z 17: reject 801712 (nature F, the whole invoice), "Contenu different de
+        // celui dans l'ET 20 Z 17". Left unwritten the zone went out as 0000, right only for the reason Other.
+        ws.write("17", treatmentReason.code)
 
         //Silly rules for this field
         val destCode = getDestCode(insuranceCode, sender)

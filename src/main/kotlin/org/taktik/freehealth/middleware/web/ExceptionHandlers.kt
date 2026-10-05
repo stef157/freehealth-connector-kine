@@ -50,7 +50,9 @@ class ExceptionHandlers {
 
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgumentException(request: HttpServletRequest, exception: IllegalArgumentException) =
-            ExceptionDto(HttpStatus.BAD_REQUEST, exception, request.servletPath).toResponseEntity()
+            ExceptionDto(HttpStatus.BAD_REQUEST, exception, request.servletPath).toResponseEntity().also {
+                log.warn("Bad request on ${request.servletPath}: ${exception.message}", exception)
+            }
 
     @ExceptionHandler(SOAPFaultException::class)
     fun handleSoapFaultException(request: HttpServletRequest, exception: SOAPFaultException) =

@@ -80,7 +80,10 @@ arm64 image), then `docker buildx build --platform linux/amd64 … --output type
 — an explicit tar, **not** `--load`, which would overwrite the arm64 image under the same tag — then `scp` into
 `~sys_kinedesk/` on the host, `docker load`, `docker compose up -d`, and two controls: the md5 of the jar the
 JVM actually opened (`/proc/1/fd/*`) against the md5 of the jar built here, and `/actuator/health`. The tar is
-removed afterwards. Production runs `0.3.897-c75b7bc271`, jar md5 `0d748ebfb3e411798992341461eef556`.
+removed afterwards. **The deployed tag is not recorded here**: it is the `image:` line of kine-data's
+`deploy/fhc/docker-compose.yml`, whose comment block logs every bump with its jar md5. A sha quoted there before
+07/09/2026 (e.g. `c75b7bc271`, the old 897) may no longer resolve — history was rewritten to remove real
+identifiers from fixtures; that comment maps old numbers to current shas.
 
 The whole thing is scripted in the kine-data repository, `deploy/release-image.sh`, in two halves —
 `poste` (build, cross-build, save, copy) and `hote` (load, up, controls, cleanup) — because `docker` is
@@ -93,6 +96,9 @@ API docs are served by **springdoc** (OpenAPI 3): UI at `/swagger-ui.html`, desc
 its `/api/index.html` / `/v2/api-docs` are gone.
 
 ### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
+
+**On 02/10/2026 upstream renamed that branch `main` and made it its default branch**; `upstream/master` stopped
+moving on 24/09. Sync from **`upstream/main`** (merged up to `c6b1b9180` in `7a54e8f58`).
 
 The migration merged upstream's branch, which had forked **before** the current master and was five months stale: it
 was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-15407. Merging it *into* our master

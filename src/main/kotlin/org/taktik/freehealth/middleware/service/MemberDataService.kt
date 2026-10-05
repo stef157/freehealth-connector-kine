@@ -31,7 +31,7 @@ import java.util.UUID
 interface MemberDataService {
     fun getMemberData(keystoreId: UUID,
         tokenId: UUID,
-        hcpQuality: String,
+        hcpQuality: String?,
         hcpNihii: String,
         hcpSsin: String?,
         hcpName: String,
@@ -48,7 +48,7 @@ interface MemberDataService {
     fun sendMemberDataRequest(
         keystoreId: UUID,
         tokenId: UUID,
-        hcpQuality: String,
+        hcpQuality: String?,
         hcpNihii: String,
         hcpName: String,
         hcpSsin: String?,

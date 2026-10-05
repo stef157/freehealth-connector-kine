@@ -723,7 +723,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
         val confirmheader = WsAddressingUtil.createHeader("", "urn:be:cin:nip:async:generic:confirm:hash")
 
         val confirm = Confirm()
-        confirm.origin = buildOriginType(hcpNihii, hcpFirstName, hcpQuality, hcpSsin)
+        confirm.origin = buildOriginType(hcpNihii, hcpFirstName, hcpQuality ?: samlToken.quality, hcpSsin)
         confirm.msgRefValues.addAll(eAgreementMessagesReference)
 
         genAsyncService.confirmRequest(samlToken, confirm, confirmheader)
@@ -731,7 +731,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
         return true
     }
 
-    private fun buildOriginType(hcpNihii: String, hcpName: String, hcpQuality: String?, hcpSsin: String?): OrigineType =
+    private fun buildOriginType(hcpNihii: String, hcpName: String, hcpQuality: String, hcpSsin: String?): OrigineType =
         OrigineType().apply {
             val principal = SecurityContextHolder.getContext().authentication?.principal as? User
             `package` = be.cin.mycarenet.esb.common.v2.PackageType().apply {
@@ -749,7 +749,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             }
             careProvider = be.cin.mycarenet.esb.common.v2.CareProviderType().apply {
                 this.nihii = be.cin.mycarenet.esb.common.v2.NihiiType().apply {
-                    quality = hcpQuality?: "medicalhouse"
+                    quality = hcpQuality
                     value = be.cin.mycarenet.esb.common.v2.ValueRefString().apply { value = hcpNihii }
                 }
 

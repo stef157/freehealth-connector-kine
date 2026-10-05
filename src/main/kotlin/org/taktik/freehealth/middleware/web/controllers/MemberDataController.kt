@@ -78,7 +78,7 @@ class MemberDataController(val memberDataService: MemberDataService, val mapper:
         val startDate: Instant = date?.let { Instant.ofEpochMilli(it) } ?: LocalDate.now().atStartOfDay(ZoneId.of(mcnTimezone)).toInstant()
         return memberDataService.getMemberData(keystoreId = keystoreId,
                                                tokenId = tokenId,
-                                               hcpQuality = hcpQuality ?: "doctor",
+                                               hcpQuality = hcpQuality,
                                                hcpNihii = hcpNihii,
                                                hcpSsin = hcpSsin ?: null,
                                                hcpName = hcpName,
@@ -114,7 +114,7 @@ class MemberDataController(val memberDataService: MemberDataService, val mapper:
         val startDate: Instant = date?.let { Instant.ofEpochMilli(it) } ?: LocalDate.now().atStartOfDay(ZoneId.of(mcnTimezone)).toInstant()
         return memberDataService.getMemberData(keystoreId = keystoreId,
                                                tokenId = tokenId,
-                                               hcpQuality = hcpQuality ?: "doctor",
+                                               hcpQuality = hcpQuality,
                                                hcpNihii = hcpNihii,
                                                hcpSsin = hcpSsin ?: null,
                                                hcpName = hcpName,
@@ -152,7 +152,7 @@ class MemberDataController(val memberDataService: MemberDataService, val mapper:
         val startDate: Instant = date?.let { Instant.ofEpochMilli(it) } ?: LocalDate.now().atStartOfDay(ZoneId.of(mcnTimezone)).toInstant()
         return memberDataService.getMemberData(keystoreId = keystoreId,
                                                tokenId = tokenId,
-                                               hcpQuality = hcpQuality ?: "doctor",
+                                               hcpQuality = hcpQuality,
                                                hcpNihii = hcpNihii,
                                                hcpSsin = hcpSsin ?: null,
                                                hcpName = hcpName,
@@ -189,7 +189,7 @@ class MemberDataController(val memberDataService: MemberDataService, val mapper:
         val startDate: Instant = date?.let { Instant.ofEpochMilli(it) } ?: LocalDate.now().atStartOfDay(ZoneId.of(mcnTimezone)).toInstant()
         return memberDataService.getMemberData(keystoreId = keystoreId,
                                                tokenId = tokenId,
-                                               hcpQuality = hcpQuality ?: "doctor",
+                                               hcpQuality = hcpQuality,
                                                hcpNihii = hcpNihii,
                                                hcpSsin = hcpSsin ?: null,
                                                hcpName = hcpName,
@@ -226,7 +226,7 @@ class MemberDataController(val memberDataService: MemberDataService, val mapper:
         return memberDataService.sendMemberDataRequest(
             keystoreId = keystoreId,
             tokenId = tokenId,
-            hcpQuality = hcpQuality ?: "medicalhouse",
+            hcpQuality = hcpQuality,
             hcpNihii = hcpNihii,
             hcpName = hcpName,
             hcpSsin = hcpSsin,

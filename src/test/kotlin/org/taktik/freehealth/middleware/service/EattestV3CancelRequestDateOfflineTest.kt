@@ -55,18 +55,20 @@ class EattestV3CancelRequestDateOfflineTest {
             String::class.java, String::class.java, String::class.java, String::class.java,
             String::class.java, String::class.java, String::class.java, String::class.java,
             String::class.java, String::class.java,
-            java.lang.Long::class.java
+            java.lang.Long::class.java,
+            String::class.java
         ).apply { isAccessible = true }
 
     /** `now` is INJECTED, never taken from the wall clock: two calls in the same second would pass by accident. */
-    private fun cancel(now: DateTime, referenceDate: Long?): SendTransactionRequest =
+    private fun cancel(now: DateTime, referenceDate: Long?, quality: String = "physiotherapist"): SendTransactionRequest =
         builder.invoke(
             service, now,
             "54123456789", "12345678901", "Jean", "Kine",
             "86103130262", "Test", "Patient", "F",
             null, null, null, null,
             "REF-1", "Erreur d'encodage",
-            referenceDate
+            referenceDate,
+            quality
         ) as SendTransactionRequest
 
     private val referenceDate = 20260902172640L
@@ -124,5 +126,25 @@ class EattestV3CancelRequestDateOfflineTest {
 
         assertThat(transaction.kmehrmessage.header.date.toString("yyyyMMddHHmmss")).isEqualTo(referenceDate.toString())
         assertThat(transaction.kmehrmessage.header.date).isEqualTo(transaction.request.date)
+    }
+
+    // 6 — the author of a cancellation follows the quality of the token, like the send it cancels. The four
+    // hcparty nodes were hard-coded persphysician: measured on acceptance 09/09/2026, a physiotherapist's
+    // cancellation left as a physician's and MyCareNet answered SAML_VALIDATION_ERROR.
+    @Test
+    fun theAuthorOfACancellationFollowsTheQuality() {
+        fun cds(transaction: SendTransactionRequest) = listOf(
+            transaction.request.author.hcparties,
+            transaction.kmehrmessage.header.sender.hcparties,
+            transaction.kmehrmessage.folders.flatMap { f -> f.transactions.flatMap { it.author.hcparties } }
+        ).map { parties -> parties.flatMap { p -> p.cds.map { it.value } } }
+
+        assertThat(cds(cancel(clockA, referenceDate, "physiotherapist")))
+            .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysiotherapist") }
+        assertThat(cds(cancel(clockA, referenceDate, "doctor")))
+            .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }
+        // a guard post signs as a physician, on the send side too
+        assertThat(cds(cancel(clockA, referenceDate, "guardpost")))
+            .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }
     }
 }

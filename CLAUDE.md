@@ -763,9 +763,14 @@ Only these domains are in use: **eAttest**, **eAgreement**, **eFact**, and **MDA
 `be.apb.gfddpp` Java tree is out of scope.
 
 End users are **physiotherapists**, so every call needs `quality=physiotherapist` — both when requesting the token
-(`/sts/token/physiotherapist`) and as `hcpQuality` on the business call. Two silent fallbacks make a missing or
-misspelled value degrade into a *doctor* request instead of an error: `EattestV3ServiceImpl.kt:347`
-(`hcpQuality ?: … ?: "doctor"`) and `getRequestAuthorCdHcParty` (line 1609, unknown quality → `persphysician`).
+(`/sts/token/physiotherapist`) and as `hcpQuality` on the business call. **A missing `hcpQuality` now resolves to
+the quality the token was requested with** (`samlToken.quality`), on eAttest v3 (send and cancel), MDA (both
+channels) and the eAgreement async confirm — it used to degrade silently into `"doctor"` or `"medicalhouse"`.
+The cancel is where it bit: `DELETE /eattestv3/send/…` has no `hcpQuality` parameter and hard-coded `doctor` /
+`persphysician`, so a physiotherapist's cancellation left as a physician's — measured 09/09/2026, answered
+`SAML_VALIDATION_ERROR`; that the quality was *the* cause is **inferred until the cancel is replayed**. Still
+there: a **misspelled** value — `getRequestAuthorCdHcParty` maps an unknown quality to `persphysician` — and the
+domains out of scope (EattestV2, GenIns, `POST /sts/token`), which keep their `"doctor"` default.
 eFact is the exception: it carries no `hcpQuality`, the profession is encoded in `InvoiceSender.professionCode` /
 `nihii` in the batch payload. Prioritise accordingly — a change touching `/eattest*`, `/eagreement`,
 `/efact` or `/mda` is load-bearing; the other controllers are not exercised today.

@@ -160,7 +160,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
     override fun sendMemberDataRequest(
         keystoreId: UUID,
         tokenId: UUID,
-        hcpQuality: String,
+        hcpQuality: String?,
         hcpNihii: String,
         hcpName: String,
         hcpSsin: String?,
@@ -172,10 +172,12 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         mdaRequest: MemberDataBatchRequest
     ): GenAsyncResponse {
         val encryptRequest = false
-        validateQuality(hcpQuality)
         val samlToken =
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw MissingTokenException("Cannot obtain token for MDA operations")
+        // No quality supplied: the one the token was requested with, never a guessed profession.
+        @Suppress("NAME_SHADOWING") val hcpQuality = hcpQuality ?: samlToken.quality
+        validateQuality(hcpQuality)
 
         val istest = config.getProperty("endpoint.dmg.notification.v1").contains("-acpt")
         val author = makeAuthor(hcpNihii, hcpName)
@@ -338,7 +340,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                 isInclude = true
                 max = 100
             }
-            origin = buildOriginType(hcpNihii, hcpName, hcpQuality, hcpSsin)
+            origin = buildOriginType(hcpNihii, hcpName, hcpQuality ?: samlToken.quality, hcpSsin)
         }
 
         val response = genAsyncService.getRequest(samlToken, get, getHeader)
@@ -492,7 +494,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         val confirmheader = WsAddressingUtil.createHeader("", "urn:be:cin:nip:async:generic:confirm:hash")
 
         val confirm = Confirm()
-        confirm.origin = buildOriginType(hcpNihii, hcpName, hcpQuality, hcpSsin)
+        confirm.origin = buildOriginType(hcpNihii, hcpName, hcpQuality ?: samlToken.quality, hcpSsin)
         confirm.msgRefValues.addAll(mdaMessagesReference)
 
         genAsyncService.confirmRequest(samlToken, confirm, confirmheader)
@@ -520,7 +522,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         val confirmheader = WsAddressingUtil.createHeader("", "urn:be:cin:nip:async:generic:confirm:hash")
         val confirm =
             BuilderFactory.getRequestObjectBuilder("mda")
-                .buildConfirmRequestWithHashes(buildOriginType(hcpNihii, hcpName, hcpQuality, hcpSsin),
+                .buildConfirmRequestWithHashes(buildOriginType(hcpNihii, hcpName, hcpQuality ?: samlToken.quality, hcpSsin),
                     listOf(),
                     mdaAcksHashes.map { valueHash -> Base64.getDecoder().decode(valueHash) })
 
@@ -530,7 +532,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
     }
 
 
-    private fun buildOriginType(hcpNihii: String, hcpName: String, hcpQuality: String?, hcpSsin: String?): OrigineType =
+    private fun buildOriginType(hcpNihii: String, hcpName: String, hcpQuality: String, hcpSsin: String?): OrigineType =
         OrigineType().apply {
             val principal = SecurityContextHolder.getContext().authentication?.principal as? User
             `package` = be.cin.mycarenet.esb.common.v2.PackageType().apply {
@@ -542,7 +544,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
             }
             careProvider = be.cin.mycarenet.esb.common.v2.CareProviderType().apply {
                 this.nihii = be.cin.mycarenet.esb.common.v2.NihiiType().apply {
-                    quality = hcpQuality?: "medicalhouse"
+                    quality = hcpQuality
                     value = be.cin.mycarenet.esb.common.v2.ValueRefString().apply { value = hcpNihii }
                 }
 
@@ -567,7 +569,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
     override fun getMemberData(
         keystoreId: UUID,
         tokenId: UUID,
-        hcpQuality: String,
+        hcpQuality: String?,
         hcpNihii: String,
         hcpSsin: String?,
         hcpName: String,
@@ -582,11 +584,13 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         facets: List<Facet>?
     ): MemberDataResponse {
         val encryptRequest = true
-        validateQuality(hcpQuality)
 
         val samlToken =
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw MissingTokenException("Cannot obtain token for Genins operations")
+        // No quality supplied: the one the token was requested with, never a guessed profession.
+        @Suppress("NAME_SHADOWING") val hcpQuality = hcpQuality ?: samlToken.quality
+        validateQuality(hcpQuality)
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
 
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)

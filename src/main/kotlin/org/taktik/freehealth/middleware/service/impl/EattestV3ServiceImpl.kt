@@ -184,7 +184,8 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                     traineeSupervisorLastName,
                     eAttestRef,
                     reason,
-                    referenceDate
+                    referenceDate,
+                    samlToken.quality
                                                       )
 
             val kmehrMarshallHelper =
@@ -232,7 +233,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                         careProvider = CareProviderType().apply {
                             nihii =
                                 NihiiType().apply {
-                                    quality = "doctor"; value =
+                                    quality = samlToken.quality; value =
                                     ValueRefString().apply { value = hcpNihii }
                                 }
                             physicalPerson = IdType().apply {
@@ -240,7 +241,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 ssin = ValueRefString().apply { value = hcpSsin }
                                 nihii =
                                     NihiiType().apply {
-                                        quality = "doctor"; value =
+                                        quality = samlToken.quality; value =
                                         ValueRefString().apply { value = hcpNihii }
                                     }
                             }
@@ -344,11 +345,12 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         decisionReference: String?,
         inputReference: String?,
         attest: Eattest): SendAttestResultWithResponse? {
-        val derivedHcpQuality = hcpQuality ?: guardPostNihii?.let {"guardpost"} ?: "doctor"
 
         val samlToken =
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw MissingTokenException("Cannot obtain token for Eattest operations")
+        // No quality supplied: the one the token was requested with, never a guessed profession.
+        val derivedHcpQuality = hcpQuality ?: guardPostNihii?.let {"guardpost"} ?: samlToken.quality
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
 
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)
@@ -1243,9 +1245,14 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         traineeSupervisorLastName: String?,
         eAttestRef: String,
         reason: String,
-        referenceDate: Long?) : SendTransactionRequest {
+        referenceDate: Long?,
+        hcpQuality: String) : SendTransactionRequest {
 
         val refDateTime = dateTime(referenceDate) ?: now
+        // The author of a cancellation is the author of the attestation it cancels: hard-coded as a physician,
+        // a physiotherapist's cancellation left as persphysician under a physiotherapist token.
+        val requestAuthorCdHcParty =
+            getRequestAuthorCdHcParty(hcpQuality).let { if (it == "guardpost") "persphysician" else it }
 
         return SendTransactionRequest().apply {
             messageProtocoleSchemaVersion = BigDecimal("1.34")
@@ -1261,7 +1268,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                         ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.INSS; sv = "1.0"; value = hcpSsin })
                         cds.add(CDHCPARTY().apply {
                             s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                            "persphysician"
+                            requestAuthorCdHcParty
                         })
                         firstname = hcpFirstName
                         familyname = hcpLastName
@@ -1288,7 +1295,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                             ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.INSS; sv = "1.0"; value = hcpSsin })
                             cds.add(CDHCPARTY().apply {
                                 s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                "persphysician"
+                                requestAuthorCdHcParty
                             })
                             firstname = hcpFirstName
                             familyname = hcpLastName
@@ -1341,7 +1348,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 })
                                 cds.add(CDHCPARTY().apply {
                                     s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                    "persphysician"
+                                    requestAuthorCdHcParty
                                 })
                                 firstname = traineeSupervisorFirstName
                                 familyname = traineeSupervisorLastName
@@ -1359,7 +1366,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 })
                                 cds.add(CDHCPARTY().apply {
                                     s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                    "persphysician"
+                                    requestAuthorCdHcParty
                                 })
                                 firstname = hcpFirstName
                                 familyname = hcpLastName

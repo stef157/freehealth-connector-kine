@@ -562,6 +562,42 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
         return true
     }
 
+    override fun confirmAcksByReferences(
+        keystoreId: UUID,
+        tokenId: UUID,
+        passPhrase: String,
+        hcpNihii: String,
+        hcpSsin: String,
+        hcpFirstName: String,
+        hcpLastName: String,
+        references: List<String>
+    ): Boolean {
+        if (references.isEmpty()) {
+            return true
+        }
+        val samlToken =
+            stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
+                ?: throw MissingTokenException("Cannot obtain token for Efact operations")
+
+        // Same SOAP action as the hash form: the Mediprima references path, already on hcpfac_12, uses it too.
+        val confirmheader = WsAddressingUtil.createHeader("", "urn:be:cin:nip:async:generic:confirm:hash")
+
+        // genericAsync v1.2 (Service_Catalogue_iSocial_genericAsync, §3.3.2 and §3.3.7): "Reference is used from
+        // version 1.2 of the service" — TAckReferences, not TAckContents. Origin as in confirmAcks (`false`, not the
+        // Mediprima `true`).
+        val confirm =
+            BuilderFactory.getRequestObjectBuilder("invoicing")
+                .buildConfirmRequestWithReference(
+                    buildOriginType(samlToken.quality, hcpNihii, hcpSsin, hcpFirstName, hcpLastName, false),
+                    listOf(),
+                    references
+                )
+
+        genAsyncService.confirmRequest(samlToken, confirm, confirmheader)
+
+        return true
+    }
+
     override fun confirmMediprimaAcks(
         keystoreId: UUID,
         tokenId: UUID,

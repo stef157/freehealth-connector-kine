@@ -44,6 +44,22 @@ interface EfactService {
         valueHashes: List<String>
     ): Boolean
 
+    /**
+     * Confirms tACKs by their `Reference` (`TAckReferences`), the genericAsync v1.2 form. `confirmAcks` sends the tACK
+     * content (`TAckContents`), which the catalogue limits to v1.1; on the v1.2 endpoint (`hcpfac_12`) it is refused
+     * with "No values found in msgbox" while the tACK is still being redelivered (measured 07/10/2026).
+     */
+    fun confirmAcksByReferences(
+        keystoreId: UUID,
+        tokenId: UUID,
+        passPhrase: String,
+        hcpNihii: String,
+        hcpSsin: String,
+        hcpFirstName: String,
+        hcpLastName: String,
+        references: List<String>
+    ): Boolean
+
     fun confirmMediprimaAcks(
         keystoreId: UUID,
         tokenId: UUID,

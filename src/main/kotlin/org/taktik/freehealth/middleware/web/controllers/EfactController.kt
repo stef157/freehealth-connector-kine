@@ -186,6 +186,32 @@ class EfactController(val efactService: EfactService, val mapper: MapperFacade) 
         )
 
     @Operation(
+        summary = "Confirm eFact acknowledgements by reference",
+        description = "Confirms acknowledgements by their Reference (genericAsync v1.2, TAckReferences). The hash route above sends the tACK content, which the v1.2 endpoint does not recognise."
+    )
+    @PutMapping("/confirm/acks/refs/{nihii}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
+    fun confirmAcksByReferences(
+        @PathVariable nihii: String,
+        @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
+        @RequestHeader(name = "X-FHC-tokenId") tokenId: UUID,
+        @RequestHeader(name = "X-FHC-passPhrase") passPhrase: String,
+        @RequestParam ssin: String,
+        @RequestParam firstName: String,
+        @RequestParam lastName: String,
+        @RequestBody references: List<String>
+    ) =
+        efactService.confirmAcksByReferences(
+            keystoreId = keystoreId,
+            tokenId = tokenId,
+            passPhrase = passPhrase,
+            hcpNihii = nihii,
+            hcpSsin = ssin,
+            hcpFirstName = firstName,
+            hcpLastName = lastName,
+            references = references
+        )
+
+    @Operation(
         summary = "Confirm Mediprima eFact acknowledgements",
         description = "Confirms the receipt of Mediprima acknowledgement messages from the MyCareNet platform, identified by their value hashes. This prevents the same acknowledgements from being returned in subsequent load calls."
     )

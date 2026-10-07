@@ -188,9 +188,11 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("403", if (amount >= 0) "+" else "-")
         ws.write("404", Math.abs(amount))
         ws.write("4041", 0)
-        // Account B is reserved to hospital institutions (920000 v02 r03, ZONE 405, control 15 "Zone # de blanc et
-        // emetteur ... # d'une institution hospitaliere"). This writer has no hospital sender: always blank.
-        ws.write("405", "")
+        // Account B carries the sign of the record, even at a zero amount. Blank was tried on the reading of 920000
+        // v02 r03 (ZONE 405, control 15) and the first real answer refuted it: OA 100 returned 920999 with
+        // Z 4061 = 40 "Erreur code signe (# de + ou -)" on a kine file whose Z 405 was blank (acceptance,
+        // 07/10/2026, send 001). Same sign as Z 403: annex 7 section 2.c, one sign per record.
+        ws.write("405", if (amount >= 0) "+" else "-")
         ws.write("406", 0)
         ws.write("4061", 0)
         ws.write("407", if (amount >= 0) "+" else "-")
@@ -231,8 +233,8 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("503", if (amount >= 0) "+" else "-")
         ws.write("504", Math.abs(amount))
         ws.write("5041", 0)
-        // Same reservation as Z 405 (920000 v02 r03, ZONE 505, control 15): blank for a non-hospital sender.
-        ws.write("505", "")
+        // Same as Z 405: the sign of the record. The same 920999 returned Z 5061 = 20 on a blank Z 505.
+        ws.write("505", if (amount >= 0) "+" else "-")
         ws.write("506", 0)
         ws.write("5061", 0)
         ws.write("507", if (amount >= 0) "+" else "-")

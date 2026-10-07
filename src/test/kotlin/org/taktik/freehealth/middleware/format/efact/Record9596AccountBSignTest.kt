@@ -42,6 +42,14 @@ class Record9596AccountBSignTest {
     }
 
     @Test
+    fun theAccountCSignFollowsTheRecordOnBothBordereaux() {
+        for ((amount, sign) in listOf(2539L to "+", -2914L to "-", 0L to "+")) {
+            assertThat(zone(record95(amount), Segment400Record95Description.zoneDescriptionsByZone, "411")).describedAs("95, $amount").isEqualTo(sign)
+            assertThat(zone(record96(amount), Segment500Record96Description.zoneDescriptionsByZone, "511")).describedAs("96, $amount").isEqualTo(sign)
+        }
+    }
+
+    @Test
     fun theAccountBAmountStaysZero() {
         assertThat(zone(record95(2539L), Segment400Record95Description.zoneDescriptionsByZone, "406")).isEqualTo("00000000000")
         assertThat(zone(record96(2539L), Segment500Record96Description.zoneDescriptionsByZone, "506")).isEqualTo("00000000000")

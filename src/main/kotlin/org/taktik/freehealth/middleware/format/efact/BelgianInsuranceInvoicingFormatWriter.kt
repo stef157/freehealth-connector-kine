@@ -202,7 +202,9 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("4091", 0)
         ws.write("410", modulo)
         ws.write("4101", 0)
-        ws.write("411", "+")
+        // Account C carries the sign of the record, like accounts A and B (annex 7 section 2.c: one sign per
+        // record). A hard "+" put "+" next to a "-" on a pure credit note.
+        ws.write("411", if (amount >= 0) "+" else "-")
         ws.write("412", 0)
         ws.write("413", "")
 
@@ -244,7 +246,9 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("5091", 0)
         ws.write("510", modulo)
         ws.write("5101", 0)
-        ws.write("511", "+")
+        // Account C carries the sign of the record, like accounts A and B (annex 7 section 2.c: one sign per
+        // record). A hard "+" put "+" next to a "-" on a pure credit note.
+        ws.write("511", if (amount >= 0) "+" else "-")
         ws.write("512", 0)
         ws.write("513", "")
 

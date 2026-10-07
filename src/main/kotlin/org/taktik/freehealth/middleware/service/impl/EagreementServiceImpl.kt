@@ -200,7 +200,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
         numberOfSessionForPrescription1: Float?,
         numberOfSessionForPrescription2: Float?,
         sctCode: String?,
-        prescriptionDate: DateTime,
+        prescriptionDate: DateTime?,
         sctDisplay: String?,
         attachments: List<EagreementController.Attachment>?
     ): EAgreementResponse? {

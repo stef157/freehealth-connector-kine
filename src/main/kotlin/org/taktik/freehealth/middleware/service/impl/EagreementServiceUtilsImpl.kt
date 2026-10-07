@@ -647,8 +647,14 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
             addEntry("urn:uuid:" + uuidGenerator.generateId(),
                 getParameters("1", agreementStartDate, agreementEndDate, hcpNihii, hcpFirstName, hcpLastName, patientSsin, patientIo, patientIoMembership, subTypeCode))
         }
+        // A claim-ask may travel WITHOUT a prescription: the CIN test procedure (FR-MPTI-EAGR-KIN V2.0, step
+        // 6.1.1) sends one on purpose and expects MISSING_PRESCRIPTION_IN_PHYSIO_CLAIM from the insurer. Then
+        // there is no ServiceRequest entry and no Claim.referral — a referral to an absent entry would be a
+        // different defect. Only for ask: the other operations still require their prescription.
+        val askWithoutPrescription = requestType == EagreementServiceImpl.RequestTypeEnum.ASK && prescription1 == null
+
         //Service Request 1
-        if (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND) {
+        if (!askWithoutPrescription && (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND)) {
             val serviceRequest1 = mapper.createObjectNode()
             serviceRequest1.put("fullUrl", "urn:uuid:" + uuidGenerator.generateId())
             val prescriptionDateNonNull = prescriptionDate ?: DateTime.now()
@@ -677,6 +683,7 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
                 provider = "PractitionerRole/PractitionerRole1",
                 attachments = attachments
             )
+            if (askWithoutPrescription) claim.referral = null
             addEntry("urn:uuid:" + uuidGenerator.generateId(), claim)
         }
 

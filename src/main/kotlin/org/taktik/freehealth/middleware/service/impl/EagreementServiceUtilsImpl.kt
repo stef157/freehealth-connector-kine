@@ -681,8 +681,37 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
         }
 
         resolveBundleReferences(rootNode)
+        alignResourceIdsOnFullUrl(rootNode, uuidGenerator.generateId())
 
         return rootNode
+    }
+
+    /**
+     * Every resource id becomes the uuid of its entry's fullUrl, and the Bundle id a uuid — the shape of the
+     * official examples (hl7.fhir.be.mycarenet 2.2.0, Bundle-ex02: `fullUrl = urn:uuid:<id>` on all nine
+     * entries).
+     *
+     * Measured against OA 100 on acceptance, 2026-10-07, MPTI eAgreement step 6.1.5, one difference at a
+     * time: with the readable ids this builder used to emit (`Bundle1`, `Claim1`, `Patient1`…) the insurer
+     * rejected every claim-ask with MISSING_MESSAGEHEADER_DESTINATION_NAME on expression `Bundle`, although
+     * the MessageHeader carried destination.name. Aligning the MessageHeader alone, or setting the two
+     * endpoints of the official example, changed nothing; aligning all ids made the insurer evaluate the
+     * message (next answer: a business rule). Bundle id and resource ids were switched together: which of
+     * the two the insurer needs has not been separated.
+     *
+     * Must run AFTER resolveBundleReferences, which maps `Type/Id` references to fullUrls by the readable
+     * ids. Contained resources keep their local id: they are referenced as `#id` from their container.
+     */
+    fun alignResourceIdsOnFullUrl(bundle: ObjectNode, bundleId: String) {
+        val bundleNode = bundle.get("Bundle") as? ObjectNode ?: return
+        bundleNode.put("id", bundleId)
+        bundleNode.get("entry")?.forEach { entry ->
+            val fullUrl = entry.get("fullUrl")?.asText() ?: return@forEach
+            if (!fullUrl.startsWith("urn:uuid:")) return@forEach
+            (entry.get("resource") as? ObjectNode)?.fields()?.forEach { (_, content) ->
+                if (content is ObjectNode && content.has("id")) content.put("id", fullUrl.removePrefix("urn:uuid:"))
+            }
+        }
     }
 
     /**

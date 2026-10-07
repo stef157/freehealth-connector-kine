@@ -387,4 +387,73 @@ class Record52AgreementNumberTest {
             assertThat(zone15(record)).isEqualTo(record50Zone15(icd, house))
         }
     }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // ET 52 Z 10 — type de support du document d'identite (upstream PR #121).
+    //
+    // ET 52 ZONE 10 (1 A - 50, MISE A JOUR 2021/32, publication 28-04-2026) lists exactly 0, 1, 2, 4, 7, 8, 9 and
+    // A: 0 no identity document, "seulement ... lorsque l'ET 52 Z 3 = 7"; 1 Belgian eID or Kids-id; 2 foreigner
+    // eID or electronic residence document; 4 ISI+; 7 barcode vignette; 8 attestation d'assure social; 9 loss or
+    // theft certificate; A itsme. The previous list (0-7) followed ET 21 Z 6, the hospital numbering, where 3 is
+    // ISI+, 4 the vignette and 5/6 the two certificates — so 3, 5 and 6 went out and 8, 9, A were refused.
+    // ---------------------------------------------------------------------------------------------------------
+
+    private fun zone10(record: String): String {
+        val zd = Record52Description.zoneDescriptionsByZone["10"]!!
+        assertThat(zd.position).isEqualTo(50)
+        assertThat(zd.length).isEqualTo(1)
+        return record.substring(zd.position - 1, zd.position - 1 + zd.length)
+    }
+
+    /** A valid capture for each value: 0 needs a manual entry for reason 7, 7 needs its Z 11 reason. */
+    private fun eidItemFor(deviceType: String) = eidItem().apply {
+        this.deviceType = deviceType
+        when (deviceType) {
+            EIDItem.DEVICE_TYPE_NONE -> { readType = EIDItem.READ_TYPE_MANUAL; manualEntryReason = 7 }
+            EIDItem.DEVICE_TYPE_VIGNETTE -> vignetteReason = 1
+        }
+    }
+
+    @Test
+    fun everyValueTheSpecificationListsIsWrittenToZone10() {
+        val specified = listOf("0", "1", "2", "4", "7", "8", "9", "A")
+        assertThat(EIDItem.VALID_DEVICE_TYPES).containsExactlyInAnyOrderElementsOf(specified)
+
+        specified.forEach { deviceType ->
+            val record = write(item().apply { eidItem = eidItemFor(deviceType); agreementNumber = this@Record52AgreementNumberTest.agreementNumber })
+            assertWellFormed(record)
+            assertThat(zone10(record)).describedAs("Z 10 = %s", deviceType).isEqualTo(deviceType)
+        }
+    }
+
+    // 3, 5 and 6 are ET 21 Z 6 values, unknown to ET 52 Z 10; refusing them here beats a rejection by the OA
+    @Test
+    fun theHospitalNumberingIsRefused() {
+        listOf("3", "5", "6", "B").forEach { deviceType ->
+            assertThatThrownBy { write(item().apply { eidItem = eidItem().apply { this.deviceType = deviceType } }) }
+                .describedAs("Z 10 = %s", deviceType)
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("deviceType must be one of")
+        }
+    }
+
+    @Test
+    fun noIdentityDocumentIsOnlyAllowedForManualEntryReason7() {
+        val refused = listOf<EIDItem.() -> Unit>(
+            { readType = EIDItem.READ_TYPE_CHIP },                                   // Z 9 = 1, so Z 3 = 0
+            { readType = EIDItem.READ_TYPE_MANUAL; manualEntryReason = 1 },          // Z 3 = 1
+            { readType = EIDItem.READ_TYPE_MANUAL; manualEntryReason = 2 }           // Z 3 = 2
+        )
+        refused.forEach { spoil ->
+            assertThatThrownBy { write(item().apply { eidItem = eidItem().apply { deviceType = EIDItem.DEVICE_TYPE_NONE }.apply(spoil) }) }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("deviceType 0 (no identity document) is only allowed when manualEntryReason is 7")
+        }
+
+        val record = write(item().apply { eidItem = eidItemFor(EIDItem.DEVICE_TYPE_NONE) })
+        assertWellFormed(record)
+        assertThat(zone10(record)).isEqualTo("0")
+        val z3 = Record52Description.zoneDescriptionsByZone["3"]!!
+        assertThat(record.substring(z3.position - 1, z3.position)).isEqualTo("7")
+    }
 }

@@ -177,7 +177,7 @@ The genuinely offline tests — measured, not assumed:
 |---|---|---|
 | `AddressbookControllerOfflineTest` | 5 | nothing; boots the app, hits `/ab/search/hcp` and `/v3/api-docs` |
 | `EfactFlatcoreOfflineTest` | 5 | nothing; renders the 920000 flat file |
-| `Record52AgreementNumberTest` | 12 | nothing; pure ET 52 zone rules |
+| `Record52AgreementNumberTest` | 20 | nothing; pure ET 52 zone rules |
 | `ValidatorTest` | 3 | nothing |
 | `EagreementServiceUtilsTest` | 19, **3 red** | `test.properties` to exist |
 

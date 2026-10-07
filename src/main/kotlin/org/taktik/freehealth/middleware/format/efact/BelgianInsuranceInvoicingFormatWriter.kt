@@ -135,6 +135,9 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
 
         ws200.writeFieldsWithoutCheckSum()
 
+        // The three sender fields of the 300 header are mandatory. `!!` turned a missing one into a bare 500
+        // NullPointerException naming nothing (07/10/2026, /efact/flat with a sender lacking lastName);
+        // `requireNotNull` throws IllegalArgumentException, which ExceptionHandlers maps to a 400 that names it.
         val ws300 = WriterSession(writer, Segment300Description)
 
         ws300.write("300", invoicingYear * 100 + invoicingMonth)
@@ -147,11 +150,11 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws300.write("3031", 0)
         ws300.write("304", if (isTest) 9991999 else 1999)
         ws300.write("3041", 0)
-        ws300.write("305", StringUtils.removeDiacriticalMarks(sender.lastName!!))
+        ws300.write("305", StringUtils.removeDiacriticalMarks(requireNotNull(sender.lastName) { "sender.lastName is required (ET 300 Z 305)" }))
         ws300.write("3051", 0)
-        ws300.write("306", StringUtils.removeDiacriticalMarks(sender.firstName!!))
+        ws300.write("306", StringUtils.removeDiacriticalMarks(requireNotNull(sender.firstName) { "sender.firstName is required (ET 300 Z 306)" }))
         ws300.write("3061", 0)
-        ws300.write("307", sender.phoneNumber!!)
+        ws300.write("307", requireNotNull(sender.phoneNumber) { "sender.phoneNumber is required (ET 300 Z 307)" })
         ws300.write("3071", 0)
         ws300.write("308", 3)
         ws300.write("3081", 0)

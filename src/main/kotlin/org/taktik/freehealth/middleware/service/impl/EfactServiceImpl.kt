@@ -239,7 +239,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
     override fun sendBatch(keystoreId: UUID, tokenId: UUID, passPhrase: String, batch: InvoicesBatch): EfactSendResponse {
         requireNotNull(keystoreId) { "Keystore id cannot be null" }
         requireNotNull(tokenId) { "Token id cannot be null" }
-        val samlToken = stsService.getSAMLToken(tokenId, keystoreId, passPhrase) ?: throw IllegalArgumentException("Cannot obtain token for Efact operations")
+        val samlToken = stsService.getSAMLToken(tokenId, keystoreId, passPhrase) ?: throw MissingTokenException("Cannot obtain token for Efact operations")
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)
 

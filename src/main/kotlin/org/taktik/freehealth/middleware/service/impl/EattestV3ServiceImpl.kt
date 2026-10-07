@@ -144,7 +144,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         inputReference: String?): SendAttestResultWithResponse? {
         val samlToken =
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
-                ?: throw IllegalArgumentException("Cannot obtain token for Ehealth Box operations")
+                ?: throw MissingTokenException("Cannot obtain token for Eattest operations")
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
 
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)

@@ -450,7 +450,8 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                         major = it.tAck.resultMajor,
                         minor = it.tAck.resultMinor,
                         message = it.tAck.resultMessage,
-                        date = null
+                        date = null,
+                        valueHash = it.tAck.value?.let { b64.encodeToString(it) }
                     )
                 },
                 mycarenetConversation = MycarenetConversation().apply {

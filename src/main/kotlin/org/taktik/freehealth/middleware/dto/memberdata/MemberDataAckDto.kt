@@ -8,5 +8,6 @@ class MemberDataAckDto (
     var major: String?,
     var minor: String?,
     var message: String?,
-    var date: Date?
+    var date: Date?,
+    var valueHash: String? = null
     )

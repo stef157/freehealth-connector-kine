@@ -363,7 +363,7 @@ Hard-won details:
 **Reading an eAttest error.** The catalogue entries carry the CIN message, the `uid`, `locFr` and a readable
 `path` (`/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`), plus `value`, the
 offending node **of your own request** — an SSIN, a NIHII, a date, so don't show it to the practitioner
-unintentionally. An error absent from the 158 entries keeps the insurer's own `description` (`f1e1df793`).
+unintentionally. An error absent from the 158 entries keeps the insurer's own `description` (`234f6e302`).
 `EattestV3ErrorRenderingOfflineTest` measures the rendering offline, and `f770a0e42` / `08a5771b6` stopped it
 handing back the shared catalogue entry itself.
 

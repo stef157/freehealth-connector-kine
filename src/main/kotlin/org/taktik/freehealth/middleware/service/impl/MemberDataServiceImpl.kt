@@ -458,7 +458,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                     this.transactionRequest = org.taktik.connector.technical.utils.MarshallerHelper(be.cin.nip.async.generic.Get::class.java, be.cin.nip.async.generic.Get::class.java).toXMLByteArray(get).toString(kotlin.text.Charsets.UTF_8)
                     this.transactionResponse = org.taktik.connector.technical.utils.MarshallerHelper(be.cin.nip.async.generic.GetResponse::class.java, be.cin.nip.async.generic.GetResponse::class.java).toXMLByteArray(response).toString(kotlin.text.Charsets.UTF_8)
                     response?.soapResponse?.writeTo(this.soapResponseOutputStream())
-                    soapRequest = MarshallerHelper(Get::class.java, Get::class.java).toXMLByteArray(get).toString(Charsets.UTF_8)
+                    response?.soapRequest?.writeTo(this.soapRequestOutputStream())
                     this.decryptedResponseContent = listOfMdaDecryptedResponseContent
                 },
                 date = null,
@@ -470,7 +470,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                     this.transactionRequest = org.taktik.connector.technical.utils.MarshallerHelper(be.cin.nip.async.generic.Get::class.java, be.cin.nip.async.generic.Get::class.java).toXMLByteArray(get).toString(kotlin.text.Charsets.UTF_8)
                     this.transactionResponse = org.taktik.connector.technical.utils.MarshallerHelper(be.cin.nip.async.generic.GetResponse::class.java, be.cin.nip.async.generic.GetResponse::class.java).toXMLByteArray(response).toString(kotlin.text.Charsets.UTF_8)
                     response?.soapResponse?.writeTo(this.soapResponseOutputStream())
-                    soapRequest = MarshallerHelper(Get::class.java, Get::class.java).toXMLByteArray(get).toString(Charsets.UTF_8)
+                    response?.soapRequest?.writeTo(this.soapRequestOutputStream())
                     this.decryptedResponseContent = listOfMdaDecryptedResponseContent
                 },
                 acks = null,
@@ -736,7 +736,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
                     this.transactionRequest = (unencryptedXmlRequest ?: xmlRequest).toString(Charsets.UTF_8)
 
                     consultMemberData.soapResponse?.writeTo(this.soapResponseOutputStream())
-                    soapRequest = MarshallerHelper(MemberDataConsultationRequest::class.java, MemberDataConsultationRequest::class.java).toXMLByteArray(request).toString(Charsets.UTF_8)
+                    consultMemberData.soapRequest?.writeTo(this.soapRequestOutputStream())
                 },
                 errors = it.response.status?.statusDetail?.anies?.map {
                     FaultType().apply {

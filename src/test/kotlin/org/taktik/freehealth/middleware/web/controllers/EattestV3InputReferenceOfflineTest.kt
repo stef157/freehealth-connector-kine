@@ -112,4 +112,21 @@ class EattestV3InputReferenceOfflineTest {
             .isEqualTo(Long::class)
         assertThat(cancel.parameters.map { it.name }).contains("inputReference")
     }
+
+    /**
+     * A cancellation can say its quality, like the send does, and is not made to. Without the parameter the route
+     * had no way to say it, and the cancellation left as a physician's under a physiotherapist token (MPTI.15,
+     * 09/09/2026, answered SAML_VALIDATION_ERROR). Optional, so a caller that omits it keeps the token's quality.
+     */
+    @Test
+    fun theCancellationRoutesTakeAnOptionalHcpQuality() {
+        listOf("/eattestv3/send/{patientSsin}", "/eattestv3/send/{patientSsin}/verbose").forEach { path ->
+            val hcpQuality = parametersOf(path, "delete")["hcpQuality"]
+            assertThat(hcpQuality).describedAs("DELETE %s", path).isNotNull
+            assertThat(hcpQuality!!.get("in").asText()).isEqualTo("query")
+            assertThat(hcpQuality.get("required").asBoolean()).describedAs("DELETE %s", path).isFalse()
+        }
+        val cancel = EattestV3Service::class.declaredFunctions.single { it.name == "cancelAttest" }
+        assertThat(cancel.parameters.single { it.name == "hcpQuality" }.type.isMarkedNullable).isTrue()
+    }
 }

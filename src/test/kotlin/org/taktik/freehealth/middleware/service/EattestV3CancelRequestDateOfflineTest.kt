@@ -20,10 +20,13 @@ package org.taktik.freehealth.middleware.service
 
 import be.fgov.ehealth.messageservices.mycarenet.core.v1.SendTransactionRequest
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.joda.time.DateTime
 import org.junit.Test
 import org.mockito.Mockito.mock
+import java.lang.reflect.InvocationTargetException
 import org.taktik.connector.technical.service.keydepot.KeyDepotService
+import org.taktik.connector.technical.utils.MarshallerHelper
 import org.taktik.freehealth.middleware.service.impl.EattestV3ServiceImpl
 
 /**
@@ -60,12 +63,17 @@ class EattestV3CancelRequestDateOfflineTest {
         ).apply { isAccessible = true }
 
     /** `now` is INJECTED, never taken from the wall clock: two calls in the same second would pass by accident. */
-    private fun cancel(now: DateTime, referenceDate: Long?, quality: String = "physiotherapist"): SendTransactionRequest =
+    private fun cancel(
+        now: DateTime,
+        referenceDate: Long?,
+        quality: String = "physiotherapist",
+        supervisor: Boolean = false
+    ): SendTransactionRequest =
         builder.invoke(
             service, now,
             "54123456789", "12345678901", "Jean", "Kine",
             "86103130262", "Test", "Patient", "F",
-            null, null, null, null,
+            *(if (supervisor) arrayOf("22222222222", "11111111111", "Anne", "Superviseur") else arrayOfNulls<String>(4)),
             "REF-1", "Erreur d'encodage",
             referenceDate,
             quality
@@ -146,5 +154,27 @@ class EattestV3CancelRequestDateOfflineTest {
         // a guard post signs as a physician, on the send side too
         assertThat(cds(cancel(clockA, referenceDate, "guardpost")))
             .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }
+    }
+
+    // 7 — the whole message, not the three nodes above: with a trainee supervisor the builder writes two more
+    // hcparty nodes, and a persphysician anywhere in the marshalled KMEHR is a physiotherapist's cancellation
+    // signed as a physician's. This is the assertion a badly resolved merge of upstream PR #123 (which falls back
+    // to "doctor") would turn red.
+    @Test
+    fun noNodeOfAPhysiotherapistsCancellationSaysPersphysician() {
+        listOf(false, true).forEach { supervisor ->
+            val xml = MarshallerHelper(SendTransactionRequest::class.java, SendTransactionRequest::class.java)
+                .toXMLByteArray(cancel(clockA, referenceDate, "physiotherapist", supervisor)).toString(Charsets.UTF_8)
+            assertThat(xml).describedAs("supervisor=%s", supervisor)
+                .contains("persphysiotherapist").doesNotContain("persphysician")
+        }
+    }
+
+    // 8 — a quality the domain cannot write is refused, where it used to be written as persphysician.
+    @Test
+    fun anUnknownQualityIsRefusedRatherThanWrittenAsAPhysician() {
+        assertThatThrownBy { cancel(clockA, referenceDate, "docter") }
+            .isInstanceOf(InvocationTargetException::class.java)
+            .hasCauseInstanceOf(IllegalArgumentException::class.java)
     }
 }

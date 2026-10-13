@@ -64,6 +64,7 @@ interface EattestV3Service {
         hcpFirstName: String,
         hcpLastName: String,
         hcpCbe: String,
+        hcpQuality: String?,
         traineeSupervisorSsin: String?,
         traineeSupervisorNihii: String?,
         traineeSupervisorFirstName: String?,

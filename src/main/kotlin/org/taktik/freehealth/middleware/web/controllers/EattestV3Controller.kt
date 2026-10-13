@@ -272,6 +272,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param hcpFirstName healthcare provider's first name
      * @param hcpLastName healthcare provider's last name
      * @param hcpCbe healthcare provider's CBE (Crossroads Bank for Enterprises) number
+     * @param hcpQuality optional provider quality; defaults to the one the token was requested with, and must agree with it
      * @param patientFirstName the patient's first name
      * @param patientLastName the patient's last name
      * @param patientGender the patient's gender
@@ -305,6 +306,8 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
         @RequestParam hcpCbe: String,
+        @Parameter(description = "Provider quality (doctor, physiotherapist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
+        @RequestParam(required = false) hcpQuality: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,
         @RequestParam patientGender: String,
@@ -327,6 +330,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
             hcpFirstName,
             hcpLastName,
             hcpCbe,
+            hcpQuality,
             traineeSupervisorSsin,
             traineeSupervisorNihii,
             traineeSupervisorFirstName,
@@ -358,6 +362,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param hcpFirstName healthcare provider's first name
      * @param hcpLastName healthcare provider's last name
      * @param hcpCbe healthcare provider's CBE (Crossroads Bank for Enterprises) number
+     * @param hcpQuality optional provider quality; defaults to the one the token was requested with, and must agree with it
      * @param patientFirstName the patient's first name
      * @param patientLastName the patient's last name
      * @param patientGender the patient's gender
@@ -391,6 +396,8 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
         @RequestParam hcpCbe: String,
+        @Parameter(description = "Provider quality (doctor, physiotherapist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
+        @RequestParam(required = false) hcpQuality: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,
         @RequestParam patientGender: String,
@@ -413,6 +420,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
             hcpFirstName,
             hcpLastName,
             hcpCbe,
+            hcpQuality,
             traineeSupervisorSsin,
             traineeSupervisorNihii,
             traineeSupervisorFirstName,

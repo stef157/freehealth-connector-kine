@@ -109,6 +109,13 @@ import javax.xml.xpath.XPathFactory
 @Service
 class EattestV3ServiceImpl(private val stsService: STSService, private val keyDepotService: KeyDepotService) : EattestV3Service {
     private val log = LoggerFactory.getLogger(this.javaClass)
+
+    /** The qualities this domain writes, and the CD-HCPARTY each one becomes on the KMEHR hcparty nodes. */
+    private val HCPARTY_CODES = mapOf(
+        "doctor" to "persphysician",
+        "physiotherapist" to "persphysiotherapist",
+        "guardpost" to "guardpost"
+    )
     private val config = ConfigFactory.getConfigValidator(listOf())
     private val freehealthEattestService: org.taktik.connector.business.eattest.EattestService = org.taktik.connector.business.eattest.impl.EattestServiceImpl()
     private val eAttestErrors =
@@ -128,6 +135,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         hcpFirstName: String,
         hcpLastName: String,
         hcpCbe: String,
+        hcpQuality: String?,
         traineeSupervisorSsin: String?,
         traineeSupervisorNihii: String?,
         traineeSupervisorFirstName: String?,
@@ -145,6 +153,8 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         val samlToken =
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw MissingTokenException("Cannot obtain token for Eattest operations")
+        // Same rule as the send side; resolved before anything leaves, so a wrong quality is a 400, not a SAML fault.
+        val hcpQuality = resolveHcpQuality(hcpQuality, null, samlToken.quality)
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
 
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)
@@ -185,7 +195,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                     eAttestRef,
                     reason,
                     referenceDate,
-                    samlToken.quality
+                    hcpQuality
                                                       )
 
             val kmehrMarshallHelper =
@@ -233,7 +243,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                         careProvider = CareProviderType().apply {
                             nihii =
                                 NihiiType().apply {
-                                    quality = samlToken.quality; value =
+                                    quality = hcpQuality; value =
                                     ValueRefString().apply { value = hcpNihii }
                                 }
                             physicalPerson = IdType().apply {
@@ -241,7 +251,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 ssin = ValueRefString().apply { value = hcpSsin }
                                 nihii =
                                     NihiiType().apply {
-                                        quality = samlToken.quality; value =
+                                        quality = hcpQuality; value =
                                         ValueRefString().apply { value = hcpNihii }
                                     }
                             }
@@ -350,7 +360,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw MissingTokenException("Cannot obtain token for Eattest operations")
         // No quality supplied: the one the token was requested with, never a guessed profession.
-        val derivedHcpQuality = hcpQuality ?: guardPostNihii?.let {"guardpost"} ?: samlToken.quality
+        val derivedHcpQuality = resolveHcpQuality(hcpQuality, guardPostNihii, samlToken.quality)
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
 
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)
@@ -1613,15 +1623,25 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         }
     }
 
-    private fun getRequestAuthorCdHcParty(hcpQuality: String): String{
-        if (hcpQuality == "doctor"){
-            return "persphysician"
-        }else if(hcpQuality == "guardpost") {
-            return "guardpost"
-        }else if(hcpQuality == "physiotherapist"){
-            return "persphysiotherapist"
-        }else{
-            return "persphysician"
+    /**
+     * The quality the KMEHR and CommonInput are written with. Absent, it is the one the token was requested
+     * with (or guardpost when a guard post is named). Present, it must be a quality this domain knows how to
+     * write and must agree with the token: MyCareNet refuses a mismatch with an opaque SAML_VALIDATION_ERROR,
+     * and an unknown value used to be written as persphysician. A guard post signs under a physician's token,
+     * so guardpost is the one value allowed to differ.
+     */
+    private fun resolveHcpQuality(explicit: String?, guardPostNihii: String?, tokenQuality: String): String {
+        val quality = explicit?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return guardPostNihii?.let { "guardpost" } ?: tokenQuality
+        require(quality in HCPARTY_CODES) {
+            "Unknown hcpQuality '$quality': eAttest v3 knows ${HCPARTY_CODES.keys.joinToString()}"
         }
+        require(quality == "guardpost" || quality == tokenQuality) {
+            "hcpQuality '$quality' contradicts the token, requested as '$tokenQuality'"
+        }
+        return quality
     }
+
+    private fun getRequestAuthorCdHcParty(hcpQuality: String): String =
+        HCPARTY_CODES[hcpQuality] ?: throw IllegalArgumentException("No CD-HCPARTY for hcpQuality '$hcpQuality'")
 }

@@ -82,7 +82,14 @@ class EattestV3HcpQualityOfflineTest {
         assertThatThrownBy { resolve("docter", null, "doctor") }
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("docter")
-        assertThatThrownBy { resolve("dentist", null, "dentist") }
+    }
+
+    // the Dentadesk case: a dentist's token, with or without the parameter
+    @Test
+    fun aDentistsQualityIsWritten() {
+        assertThat(resolve(null, null, "dentist")).isEqualTo("dentist")
+        assertThat(resolve("dentist", null, "dentist")).isEqualTo("dentist")
+        assertThatThrownBy { resolve("physiotherapist", null, "dentist") }
             .isInstanceOf(IllegalArgumentException::class.java)
     }
 }

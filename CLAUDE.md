@@ -788,7 +788,7 @@ an image before the fix reproduces `SAML_VALIDATION_ERROR`, HEAD gets a signed 2
 test-certificate CE 156 — the archive is `~/ehealth/eattestv3-cancel-2026-10-13/`. Both `DELETE` routes now take
 an optional `hcpQuality` (same place as upstream PR #123, which falls back to `"doctor"` instead — **keep our
 fallback when it merges**). On eAttest v3, send and cancel, an explicit quality must be one of `doctor`,
-`physiotherapist`, `guardpost` and must agree with the token (`guardpost` excepted, it signs under a physician's
+`physiotherapist`, `dentist`, `guardpost` and must agree with the token (`guardpost` excepted, it signs under a physician's
 token), otherwise **400** before anything leaves — it used to be written as `persphysician`
 (`EattestV3HcpQualityOfflineTest`). Still `"doctor"` by default: the domains out of scope (EattestV2, GenIns,
 `POST /sts/token`).

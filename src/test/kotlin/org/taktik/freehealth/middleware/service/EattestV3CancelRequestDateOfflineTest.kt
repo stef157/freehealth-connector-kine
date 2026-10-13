@@ -151,6 +151,8 @@ class EattestV3CancelRequestDateOfflineTest {
             .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysiotherapist") }
         assertThat(cds(cancel(clockA, referenceDate, "doctor")))
             .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }
+        assertThat(cds(cancel(clockA, referenceDate, "dentist")))
+            .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persdentist") }
         // a guard post signs as a physician, on the send side too
         assertThat(cds(cancel(clockA, referenceDate, "guardpost")))
             .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }

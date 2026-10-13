@@ -114,6 +114,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
     private val HCPARTY_CODES = mapOf(
         "doctor" to "persphysician",
         "physiotherapist" to "persphysiotherapist",
+        "dentist" to "persdentist",
         "guardpost" to "guardpost"
     )
     private val config = ConfigFactory.getConfigValidator(listOf())

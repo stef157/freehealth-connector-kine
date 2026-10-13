@@ -306,7 +306,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
         @RequestParam hcpCbe: String,
-        @Parameter(description = "Provider quality (doctor, physiotherapist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
+        @Parameter(description = "Provider quality (doctor, physiotherapist, dentist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
         @RequestParam(required = false) hcpQuality: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,
@@ -396,7 +396,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
         @RequestParam hcpCbe: String,
-        @Parameter(description = "Provider quality (doctor, physiotherapist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
+        @Parameter(description = "Provider quality (doctor, physiotherapist, dentist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
         @RequestParam(required = false) hcpQuality: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,

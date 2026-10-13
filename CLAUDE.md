@@ -781,11 +781,17 @@ End users are **physiotherapists**, so every call needs `quality=physiotherapist
 (`/sts/token/physiotherapist`) and as `hcpQuality` on the business call. **A missing `hcpQuality` now resolves to
 the quality the token was requested with** (`samlToken.quality`), on eAttest v3 (send and cancel), MDA (both
 channels) and the eAgreement async confirm — it used to degrade silently into `"doctor"` or `"medicalhouse"`.
-The cancel is where it bit: `DELETE /eattestv3/send/…` has no `hcpQuality` parameter and hard-coded `doctor` /
-`persphysician`, so a physiotherapist's cancellation left as a physician's — measured 09/09/2026, answered
-`SAML_VALIDATION_ERROR`; that the quality was *the* cause is **inferred until the cancel is replayed**. Still
-there: a **misspelled** value — `getRequestAuthorCdHcParty` maps an unknown quality to `persphysician` — and the
-domains out of scope (EattestV2, GenIns, `POST /sts/token`), which keep their `"doctor"` default.
+The cancel is where it bit: `DELETE /eattestv3/send/…` hard-coded `doctor` / `persphysician`, so a
+physiotherapist's cancellation left as a physician's and answered `SAML_VALIDATION_ERROR` (09/09/2026).
+**That the quality was the cause is measured** (13/10/2026, A/B on acceptance, same request, no `hcpQuality`):
+an image before the fix reproduces `SAML_VALIDATION_ERROR`, HEAD gets a signed 200 carrying only the known
+test-certificate CE 156 — the archive is `~/ehealth/eattestv3-cancel-2026-10-13/`. Both `DELETE` routes now take
+an optional `hcpQuality` (same place as upstream PR #123, which falls back to `"doctor"` instead — **keep our
+fallback when it merges**). On eAttest v3, send and cancel, an explicit quality must be one of `doctor`,
+`physiotherapist`, `guardpost` and must agree with the token (`guardpost` excepted, it signs under a physician's
+token), otherwise **400** before anything leaves — it used to be written as `persphysician`
+(`EattestV3HcpQualityOfflineTest`). Still `"doctor"` by default: the domains out of scope (EattestV2, GenIns,
+`POST /sts/token`).
 eFact is the exception: it carries no `hcpQuality`, the profession is encoded in `InvoiceSender.professionCode` /
 `nihii` in the batch payload. Prioritise accordingly — a change touching `/eattest*`, `/eagreement`,
 `/efact` or `/mda` is load-bearing; the other controllers are not exercised today.

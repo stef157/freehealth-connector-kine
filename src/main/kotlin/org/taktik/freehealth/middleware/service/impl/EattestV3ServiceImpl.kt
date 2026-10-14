@@ -110,11 +110,23 @@ import javax.xml.xpath.XPathFactory
 class EattestV3ServiceImpl(private val stsService: STSService, private val keyDepotService: KeyDepotService) : EattestV3Service {
     private val log = LoggerFactory.getLogger(this.javaClass)
 
-    /** The qualities this domain writes, and the CD-HCPARTY each one becomes on the KMEHR hcparty nodes. */
+    /**
+     * The qualities this domain writes, and the CD-HCPARTY each one becomes on the KMEHR hcparty nodes: every
+     * individual quality the STS issues a token for (STSServiceImpl), none of them a default. The organisations
+     * (medicalhouse, groupofnurses, officedoctors…) are left out on purpose: they author no attestation, and
+     * hcpTypeFromSamlToken would fold them into persphysician. guardpost is the one organisation that signs.
+     */
     private val HCPARTY_CODES = mapOf(
         "doctor" to "persphysician",
         "physiotherapist" to "persphysiotherapist",
         "dentist" to "persdentist",
+        "nurse" to "persnurse",
+        "midwife" to "persmidwife",
+        "logopedist" to "perslogopedist",
+        "dietician" to "persdietician",
+        "podologist" to "perspodologist",
+        "clinicalpsychologist" to "persclinicalpsychologist",
+        "optician" to "persoptician",
         "guardpost" to "guardpost"
     )
     private val config = ConfigFactory.getConfigValidator(listOf())
@@ -141,6 +153,9 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         traineeSupervisorNihii: String?,
         traineeSupervisorFirstName: String?,
         traineeSupervisorLastName: String?,
+        guardPostNihii: String?,
+        guardPostSsin: String?,
+        guardPostName: String?,
         passPhrase: String,
         patientSsin: String,
         patientFirstName: String,
@@ -155,7 +170,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
                 ?: throw MissingTokenException("Cannot obtain token for Eattest operations")
         // Same rule as the send side; resolved before anything leaves, so a wrong quality is a 400, not a SAML fault.
-        val hcpQuality = resolveHcpQuality(hcpQuality, null, samlToken.quality)
+        val derivedHcpQuality = resolveHcpQuality(hcpQuality, guardPostNihii, samlToken.quality)
         val keystore = stsService.getKeyStore(keystoreId, passPhrase)!!
 
         val credential = KeyStoreCredential(keystoreId, keystore, "authentication", passPhrase, samlToken.quality)
@@ -175,7 +190,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
 
         val instant = DateTime.now()
         val now = DateTime(0).withYear(instant.year).withMonthOfYear(instant.monthOfYear).withDayOfMonth(instant.dayOfMonth).withHourOfDay(instant.hourOfDay).withMinuteOfHour(instant.minuteOfHour).withSecondOfMinute(instant.secondOfMinute).withMillisOfSecond(0)
-        val refDateTime = dateTime(referenceDate) ?: now
+        val requestAuthorNihii = if(derivedHcpQuality == "guardpost") guardPostNihii else hcpNihii
 
         return extractEtk(credential)?.let {
             val sendTransactionRequest =
@@ -185,6 +200,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                     hcpSsin,
                     hcpFirstName,
                     hcpLastName,
+                    derivedHcpQuality,
                     patientSsin,
                     patientFirstName,
                     patientLastName,
@@ -193,10 +209,12 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                     traineeSupervisorSsin,
                     traineeSupervisorFirstName,
                     traineeSupervisorLastName,
+                    guardPostNihii,
+                    guardPostSsin,
+                    guardPostName,
                     eAttestRef,
                     reason,
-                    referenceDate,
-                    hcpQuality
+                    referenceDate
                                                       )
 
             val kmehrMarshallHelper =
@@ -241,20 +259,39 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                             }
                             name = ValueRefString().apply { value = packageInfo.packageName }
                         }
+
                         careProvider = CareProviderType().apply {
-                            nihii =
-                                NihiiType().apply {
-                                    quality = hcpQuality; value =
-                                    ValueRefString().apply { value = hcpNihii }
-                                }
-                            physicalPerson = IdType().apply {
-                                name = ValueRefString().apply { value = "$hcpFirstName $hcpLastName" }
-                                ssin = ValueRefString().apply { value = hcpSsin }
+                            if (derivedHcpQuality == "guardpost") {
                                 nihii =
                                     NihiiType().apply {
-                                        quality = hcpQuality; value =
+                                        quality = "guardpost"; value =
+                                        ValueRefString().apply { value = requestAuthorNihii!!.padEnd(11, '0') }
+                                    }
+
+                                guardPostNihii?.let {
+                                    organization = IdType().apply {
+                                        name = ValueRefString().apply { value = guardPostName }
+                                        nihii = NihiiType().apply {
+                                            quality = "guardpost"; value =
+                                            ValueRefString().apply { value = requestAuthorNihii!!.padEnd(11, '0') }
+                                        }
+                                    }
+                                }
+                            } else {
+                                nihii =
+                                    NihiiType().apply {
+                                        quality = derivedHcpQuality; value =
                                         ValueRefString().apply { value = hcpNihii }
                                     }
+                                physicalPerson = IdType().apply {
+                                    name = ValueRefString().apply { value = "$hcpFirstName $hcpLastName" }
+                                    ssin = ValueRefString().apply { value = hcpSsin }
+                                    nihii =
+                                        NihiiType().apply {
+                                            quality = derivedHcpQuality; value =
+                                            ValueRefString().apply { value = hcpNihii.padEnd(11, '0') }
+                                        }
+                                }
                             }
                         }
                     }
@@ -1246,6 +1283,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         hcpSsin: String,
         hcpFirstName: String,
         hcpLastName: String,
+        hcpQuality: String,
         patientSsin: String,
         patientFirstName: String,
         patientLastName: String,
@@ -1254,35 +1292,42 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         traineeSupervisorSsin: String?,
         traineeSupervisorFirstName: String?,
         traineeSupervisorLastName: String?,
+        guardPostNihii: String?,
+        guardPostSsin: String?,
+        guardPostName: String?,
         eAttestRef: String,
         reason: String,
-        referenceDate: Long?,
-        hcpQuality: String) : SendTransactionRequest {
+        referenceDate: Long?) : SendTransactionRequest {
+
+        val requestAuthorNihii = if(hcpQuality == "guardpost") guardPostNihii else hcpNihii
+        val requestAuthorSsin = if(hcpQuality == "guardpost") guardPostSsin else hcpSsin
+        // The author of a cancellation is the author of the attestation it cancels, written as the send writes it:
+        // hard-coded as a physician, a physiotherapist's cancellation left as persphysician under its own token.
+        val requestAuthorCdHcParty = getRequestAuthorCdHcParty(hcpQuality)
 
         val refDateTime = dateTime(referenceDate) ?: now
-        // The author of a cancellation is the author of the attestation it cancels: hard-coded as a physician,
-        // a physiotherapist's cancellation left as persphysician under a physiotherapist token.
-        val requestAuthorCdHcParty =
-            getRequestAuthorCdHcParty(hcpQuality).let { if (it == "guardpost") "persphysician" else it }
 
         return SendTransactionRequest().apply {
             messageProtocoleSchemaVersion = BigDecimal("1.34")
             request = RequestType().apply {
                 id =
                     IDKMEHR().apply {
-                        s = IDKMEHRschemes.ID_KMEHR; sv = "1.0"; value = hcpNihii + "." +
+                        s = IDKMEHRschemes.ID_KMEHR; sv = "1.0"; value = requestAuthorNihii!!.padEnd(11, '0') + "." +
                         refDateTime.toString("yyyyMMddHHmmss")
                     }
                 author = AuthorType().apply {
                     hcparties.add(HcpartyType().apply {
-                        ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.ID_HCPARTY; sv = "1.0"; value = hcpNihii })
-                        ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.INSS; sv = "1.0"; value = hcpSsin })
+                        ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.ID_HCPARTY; sv = "1.0"; value = requestAuthorNihii!!.padEnd(11, '0') })
+                        ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.INSS; sv = "1.0"; value = requestAuthorSsin })
                         cds.add(CDHCPARTY().apply {
-                            s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                            requestAuthorCdHcParty
+                            s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value = requestAuthorCdHcParty
                         })
-                        firstname = hcpFirstName
-                        familyname = hcpLastName
+                        if (hcpQuality == "guardpost") {
+                            name = guardPostName
+                        } else {
+                            firstname = hcpFirstName
+                            familyname = hcpLastName
+                        }
                     })
                 }
                 date = refDateTime; time = refDateTime
@@ -1301,15 +1346,18 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                         hcparties.add(HcpartyType().apply {
                             ids.add(IDHCPARTY().apply {
                                 s = IDHCPARTYschemes.ID_HCPARTY; sv = "1.0"; value =
-                                hcpNihii
+                                requestAuthorNihii!!.padEnd(11, '0')
                             })
-                            ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.INSS; sv = "1.0"; value = hcpSsin })
+                            ids.add(IDHCPARTY().apply { s = IDHCPARTYschemes.INSS; sv = "1.0"; value = requestAuthorSsin })
                             cds.add(CDHCPARTY().apply {
-                                s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                requestAuthorCdHcParty
+                                s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value = requestAuthorCdHcParty
                             })
-                            firstname = hcpFirstName
-                            familyname = hcpLastName
+                            if (hcpQuality == "guardpost") {
+                                name = guardPostName
+                            } else {
+                                firstname = hcpFirstName
+                                familyname = hcpLastName
+                            }
                         })
                     }
                     recipients.add(RecipientType().apply {
@@ -1359,7 +1407,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 })
                                 cds.add(CDHCPARTY().apply {
                                     s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                    requestAuthorCdHcParty
+                                    if(requestAuthorCdHcParty == "guardpost") "persphysician" else requestAuthorCdHcParty
                                 })
                                 firstname = traineeSupervisorFirstName
                                 familyname = traineeSupervisorLastName
@@ -1376,8 +1424,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                     hcpSsin
                                 })
                                 cds.add(CDHCPARTY().apply {
-                                    s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                    requestAuthorCdHcParty
+                                    s = CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value = if(requestAuthorCdHcParty == "guardpost") "persphysician" else requestAuthorCdHcParty
                                 })
                                 firstname = hcpFirstName
                                 familyname = hcpLastName
@@ -1632,15 +1679,19 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
      * so guardpost is the one value allowed to differ.
      */
     private fun resolveHcpQuality(explicit: String?, guardPostNihii: String?, tokenQuality: String): String {
+        val guardPost = guardPostNihii?.trim()?.takeIf { it.isNotEmpty() }
         val quality = explicit?.trim()?.takeIf { it.isNotEmpty() }
-            ?: return guardPostNihii?.let { "guardpost" } ?: tokenQuality
-        require(quality in HCPARTY_CODES) {
-            "Unknown hcpQuality '$quality': eAttest v3 knows ${HCPARTY_CODES.keys.joinToString()}"
+        val resolved = quality ?: guardPost?.let { "guardpost" } ?: tokenQuality
+        require(resolved in HCPARTY_CODES) {
+            if (quality != null) "Unknown hcpQuality '$quality': eAttest v3 knows ${HCPARTY_CODES.keys.joinToString()}"
+            else "The token was requested as '$tokenQuality', which eAttest v3 cannot write: it knows ${HCPARTY_CODES.keys.joinToString()}"
         }
-        require(quality == "guardpost" || quality == tokenQuality) {
+        require(quality == null || quality == "guardpost" || quality == tokenQuality) {
             "hcpQuality '$quality' contradicts the token, requested as '$tokenQuality'"
         }
-        return quality
+        // guardpost authors the KMEHR under the guard post's NIHII; without one it used to die on a bare !! (500)
+        require(resolved != "guardpost" || guardPost != null) { "hcpQuality 'guardpost' needs a guardPostNihii" }
+        return resolved
     }
 
     private fun getRequestAuthorCdHcParty(hcpQuality: String): String =

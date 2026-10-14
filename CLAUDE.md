@@ -98,9 +98,9 @@ its `/api/index.html` / `/v2/api-docs` are gone.
 ### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
 
 **On 02/10/2026 upstream renamed that branch `main` and made it its default branch.** Sync from
-**`upstream/main`** (merged up to `c6b1b9180` in `7a54e8f58`) — **and still watch `upstream/master`**: it was
-thought dead since 24/09, yet PR #120 landed there on 05/10/2026 and not on `main` (merged up to `b055d6883`
-in `b31cf2201`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
+**`upstream/main`** (merged up to `9fbc96584`, 14/10/2026) — **and still watch `upstream/master`**: it was
+thought dead since 24/09, yet PR #120 landed there on 05/10/2026 and not on `main`, and PR #123 again on
+13/10 before upstream carried it over (#124; `master` merged up to `f24b7673d`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
 
 The migration merged upstream's branch, which had forked **before** the current master and was five months stale: it
 was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-15407. Merging it *into* our master
@@ -786,11 +786,16 @@ physiotherapist's cancellation left as a physician's and answered `SAML_VALIDATI
 **That the quality was the cause is measured** (13/10/2026, A/B on acceptance, same request, no `hcpQuality`):
 an image before the fix reproduces `SAML_VALIDATION_ERROR`, HEAD gets a signed 200 carrying only the known
 test-certificate CE 156 — the archive is `~/ehealth/eattestv3-cancel-2026-10-13/`. Both `DELETE` routes now take
-an optional `hcpQuality` (same place as upstream PR #123, which falls back to `"doctor"` instead — **keep our
-fallback when it merges**). On eAttest v3, send and cancel, an explicit quality must be one of `doctor`,
-`physiotherapist`, `dentist`, `guardpost` and must agree with the token (`guardpost` excepted, it signs under a physician's
-token), otherwise **400** before anything leaves — it used to be written as `persphysician`
-(`EattestV3HcpQualityOfflineTest`). Still `"doctor"` by default: the domains out of scope (EattestV2, GenIns,
+an optional `hcpQuality`. **Upstream PR #123 is merged, its `"doctor"` fallback is not**: we kept the token's
+quality and took its guard post half — `guardPostNihii/Ssin/Name` on both `DELETE` routes, the cancellation then
+authored by the guard post as its send is (NIHII padded to 11, `CD-HCPARTY=guardpost`, the transaction author
+staying the signing physician). **No profession is a default, multi-quality**: on eAttest v3, send and cancel,
+the quality — explicit or the token's — must be an individual STS quality (`doctor`, `physiotherapist`,
+`dentist`, `nurse`, `midwife`, `logopedist`, `dietician`, `podologist`, `clinicalpsychologist`, `optician`) or
+`guardpost`, each mapped to its own `pers*` code (`HCPARTY_CODES`); an organisation's token (`medicalhouse`…),
+an unknown value, a value that contradicts the token (`guardpost` excepted, it signs under a physician's token)
+or `guardpost` without `guardPostNihii` is a **400** before anything leaves — those used to be written as
+`persphysician` or die on a bare `!!` (`EattestV3HcpQualityOfflineTest`). Still `"doctor"` by default: the domains out of scope (EattestV2, GenIns,
 `POST /sts/token`).
 eFact is the exception: it carries no `hcpQuality`, the profession is encoded in `InvoiceSender.professionCode` /
 `nihii` in the batch payload. Prioritise accordingly — a change touching `/eattest*`, `/eagreement`,

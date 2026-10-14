@@ -64,7 +64,8 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param hcpFirstName healthcare provider's first name
      * @param hcpLastName healthcare provider's last name
      * @param hcpCbe healthcare provider's CBE (Crossroads Bank for Enterprises) number
-     * @param hcpQuality optional provider quality/role (e.g. "doctor", "dentist")
+     * @param hcpQuality optional provider quality; defaults to the one the token was requested with (guardpost when
+     *   guardPostNihii is given), and must agree with it
      * @param patientFirstName the patient's first name
      * @param patientLastName the patient's last name
      * @param patientGender the patient's gender
@@ -169,7 +170,8 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param hcpFirstName healthcare provider's first name
      * @param hcpLastName healthcare provider's last name
      * @param hcpCbe healthcare provider's CBE (Crossroads Bank for Enterprises) number
-     * @param hcpQuality optional provider quality/role (e.g. "doctor", "dentist")
+     * @param hcpQuality optional provider quality; defaults to the one the token was requested with (guardpost when
+     *   guardPostNihii is given), and must agree with it
      * @param patientFirstName the patient's first name
      * @param patientLastName the patient's last name
      * @param patientGender the patient's gender
@@ -284,6 +286,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param traineeSupervisorNihii optional NIHII of the trainee's supervisor
      * @param traineeSupervisorFirstName optional first name of the trainee's supervisor
      * @param traineeSupervisorLastName optional last name of the trainee's supervisor
+     * @param guardPostNihii optional NIHII of the guard post (poste de garde); the cancellation is then authored by it
+     * @param guardPostSsin optional SSIN of the guard post
+     * @param guardPostName optional name of the guard post
      * @param inputReference optional InputReference to replay. A duplicate, as the MPTI eAttest V3 Duplicata
      *   manual defines it (4.1.2), is the same message sent again with the same InputReference, the same Kmehr-ID
      *   and an increased attemptNbr; without this parameter the reference is regenerated from the clock and the
@@ -306,7 +311,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
         @RequestParam hcpCbe: String,
-        @Parameter(description = "Provider quality (doctor, physiotherapist, dentist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
+        @Parameter(description = "Provider quality, e.g. physiotherapist. Defaults to the quality the token was requested with (guardpost when guardPostNihii is given); a value that contradicts the token, or that eAttest v3 cannot write, is refused with a 400.")
         @RequestParam(required = false) hcpQuality: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,
@@ -319,6 +324,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam(required = false) traineeSupervisorNihii: String?,
         @RequestParam(required = false) traineeSupervisorFirstName: String?,
         @RequestParam(required = false) traineeSupervisorLastName: String?,
+        @RequestParam(required = false) guardPostNihii: String?,
+        @RequestParam(required = false) guardPostSsin: String?,
+        @RequestParam(required = false) guardPostName: String?,
         @Parameter(description = "InputReference to replay, so that a resend with an increased attemptNbr is recognised as a duplicate (MPTI eAttest V3 Duplicata 4.1.2). Generated from the clock when absent.")
         @RequestParam(required = false) inputReference: String?
                   ): SendAttestResult? =
@@ -335,6 +343,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
             traineeSupervisorNihii,
             traineeSupervisorFirstName,
             traineeSupervisorLastName,
+            guardPostNihii,
+            guardPostSsin,
+            guardPostName,
             passPhrase,
             patientSsin,
             patientFirstName,
@@ -374,6 +385,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
      * @param traineeSupervisorNihii optional NIHII of the trainee's supervisor
      * @param traineeSupervisorFirstName optional first name of the trainee's supervisor
      * @param traineeSupervisorLastName optional last name of the trainee's supervisor
+     * @param guardPostNihii optional NIHII of the guard post (poste de garde); the cancellation is then authored by it
+     * @param guardPostSsin optional SSIN of the guard post
+     * @param guardPostName optional name of the guard post
      * @param inputReference optional InputReference to replay. A duplicate, as the MPTI eAttest V3 Duplicata
      *   manual defines it (4.1.2), is the same message sent again with the same InputReference, the same Kmehr-ID
      *   and an increased attemptNbr; without this parameter the reference is regenerated from the clock and the
@@ -396,7 +410,7 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
         @RequestParam hcpCbe: String,
-        @Parameter(description = "Provider quality (doctor, physiotherapist, dentist, guardpost). Defaults to the quality the token was requested with; a value that contradicts it is refused with a 400.")
+        @Parameter(description = "Provider quality, e.g. physiotherapist. Defaults to the quality the token was requested with (guardpost when guardPostNihii is given); a value that contradicts the token, or that eAttest v3 cannot write, is refused with a 400.")
         @RequestParam(required = false) hcpQuality: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,
@@ -409,6 +423,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
         @RequestParam(required = false) traineeSupervisorNihii: String?,
         @RequestParam(required = false) traineeSupervisorFirstName: String?,
         @RequestParam(required = false) traineeSupervisorLastName: String?,
+        @RequestParam(required = false) guardPostNihii: String?,
+        @RequestParam(required = false) guardPostSsin: String?,
+        @RequestParam(required = false) guardPostName: String?,
         @Parameter(description = "InputReference to replay, so that a resend with an increased attemptNbr is recognised as a duplicate (MPTI eAttest V3 Duplicata 4.1.2). Generated from the clock when absent.")
         @RequestParam(required = false) inputReference: String?
                     ) =
@@ -425,6 +442,9 @@ class EattestV3Controller(val eattestService: EattestV3Service) {
             traineeSupervisorNihii,
             traineeSupervisorFirstName,
             traineeSupervisorLastName,
+            guardPostNihii,
+            guardPostSsin,
+            guardPostName,
             passPhrase,
             patientSsin,
             patientFirstName,

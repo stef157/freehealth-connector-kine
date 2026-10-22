@@ -55,11 +55,12 @@ class EattestV3CancelRequestDateOfflineTest {
             "getEattestCancelSendTransactionRequest",
             DateTime::class.java,
             String::class.java, String::class.java, String::class.java, String::class.java,
+            String::class.java,
             String::class.java, String::class.java, String::class.java, String::class.java,
             String::class.java, String::class.java, String::class.java, String::class.java,
+            String::class.java, String::class.java, String::class.java,
             String::class.java, String::class.java,
-            java.lang.Long::class.java,
-            String::class.java
+            java.lang.Long::class.java
         ).apply { isAccessible = true }
 
     /** `now` is INJECTED, never taken from the wall clock: two calls in the same second would pass by accident. */
@@ -72,11 +73,12 @@ class EattestV3CancelRequestDateOfflineTest {
         builder.invoke(
             service, now,
             "54123456789", "12345678901", "Jean", "Kine",
+            quality,
             "86103130262", "Test", "Patient", "F",
             *(if (supervisor) arrayOf("22222222222", "11111111111", "Anne", "Superviseur") else arrayOfNulls<String>(4)),
+            *(if (quality == "guardpost") arrayOf("33333333", "44444444444", "Poste de garde") else arrayOfNulls<String>(3)),
             "REF-1", "Erreur d'encodage",
-            referenceDate,
-            quality
+            referenceDate
         ) as SendTransactionRequest
 
     private val referenceDate = 20260902172640L
@@ -153,9 +155,11 @@ class EattestV3CancelRequestDateOfflineTest {
             .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }
         assertThat(cds(cancel(clockA, referenceDate, "dentist")))
             .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persdentist") }
-        // a guard post signs as a physician, on the send side too
-        assertThat(cds(cancel(clockA, referenceDate, "guardpost")))
-            .allSatisfy { assertThat(it).isNotEmpty.containsOnly("persphysician") }
+        // a guard post authors the request and the header as itself (PR #123); the transaction stays the physician's
+        val (requestAuthor, sender, transactionAuthor) = cds(cancel(clockA, referenceDate, "guardpost"))
+        assertThat(requestAuthor).isNotEmpty.containsOnly("guardpost")
+        assertThat(sender).isNotEmpty.containsOnly("guardpost")
+        assertThat(transactionAuthor).isNotEmpty.containsOnly("persphysician")
     }
 
     // 7 — the whole message, not the three nodes above: with a trainee supervisor the builder writes two more

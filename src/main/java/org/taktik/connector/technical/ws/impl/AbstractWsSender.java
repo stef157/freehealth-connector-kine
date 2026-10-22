@@ -139,7 +139,8 @@ public abstract class AbstractWsSender {
          reply.put("jakarta.xml.ws.handler.message.outbound", false);
          ArrayUtils.reverse(chain);
          executeHandlers(chain, reply);
-         return new GenericResponse(reply.getMessage());
+         // The sent envelope travels with the reply: asObject hands it to every SoapConversationLogger
+         return new GenericResponse(reply.getMessage(), message);
       } catch (InterruptedException ie) {
          Thread.currentThread().interrupt();
          throw new TechnicalConnectorException(

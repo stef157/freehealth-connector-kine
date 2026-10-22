@@ -825,6 +825,13 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   `connector.soaphandler.connection.request.timeout.GenAsync.eagreement`. A key matching no endpoint is ignored
   silently and the default **60 s** applies — which is what the GenAsync keys, written `generic.<domain>`, did until
   10/2026 (Sentry KINEDESK-SATELLITE-5), and what upstream's switch of invoicing to `hcpfac_12` did to eFact's.
+- **`mycarenetConversation.soapRequest` is the envelope that left, and it carries the CIN licence in clear.**
+  `AbstractWsSender.call()` hands the sent `SOAPMessage` to `GenericResponse`, and `asObject` passes it to every
+  `SoapConversationLogger`. Until 10/2026 it did not (dropped in `2ecfc2748`, 2020), so every service that writes
+  `response.soapRequest` — the MDA routes of `712cfcbfa` included — answered `null`. Since the fix that field holds
+  the signed envelope, `CommonInput/Origin/Package/License` with it: a client that stores the answer must redact
+  `<License>`. A SOAP fault still returns no request (`NoRetryInvokeStrategy`), since `asObject` throws first.
+  `AbstractWsSenderSoapRequestOfflineTest` checks the bytes the server received.
   `ConnectionTimeOutHandlerOfflineTest` checks the four shipped files, so an endpoint URL changed without its key
   turns it red.
 - `genJaxb` exists in `build.gradle.kts` but is dormant (its dependencies are commented out); JAXB classes are

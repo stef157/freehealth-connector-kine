@@ -2,19 +2,31 @@ package org.taktik.freehealth.middleware.web.controllers
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.nimbusds.jose.crypto.ECDSAVerifier
+import com.nimbusds.jose.crypto.RSASSAVerifier
+import com.nimbusds.jose.jwk.ECKey
+import com.nimbusds.jose.jwk.JWKSet
+import com.nimbusds.jose.jwk.RSAKey
+import com.nimbusds.jwt.SignedJWT
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.Assume
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpMethod
+import org.springframework.http.ResponseEntity
 import org.springframework.test.context.junit4.SpringRunner
 import org.taktik.freehealth.middleware.MyTestsConfiguration
+import org.taktik.freehealth.middleware.domain.sts.IamTokenResult
 import org.taktik.freehealth.middleware.domain.sts.SamlTokenResult
+import java.net.URL
+import java.util.Date
 
 @RunWith(SpringRunner::class)
 @Import(MyTestsConfiguration::class)
@@ -26,6 +38,9 @@ class STSControllerTest : EhealthTest() {
     @Autowired
     private val restTemplate: TestRestTemplate? = null
     private val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
+
+    @Value("\${org.taktik.icure.iam.clientId:}")
+    private val iamClientId: String? = null
 
     @Test
     fun uploadKeystore() {
@@ -48,6 +63,67 @@ class STSControllerTest : EhealthTest() {
 
     @Test
     fun registerToken() {
+    }
+
+    private fun postTokenExchangeForIam(refreshable: Boolean, ssin: String? = null): ResponseEntity<String> {
+        Assume.assumeFalse("org.taktik.icure.iam.clientId is not set", iamClientId.isNullOrBlank())
+        val (keystoreId, tokenId, passPhrase) = register(restTemplate!!, port, ssin1!!, password1!!)
+        return this.restTemplate.exchange(
+            "http://localhost:$port/sts/token/exchange/iam?clientId=$iamClientId&refreshable=$refreshable${ssin?.let { "&ssin=$it" } ?: ""}",
+            HttpMethod.POST,
+            HttpEntity<Void>(createHeaders(null, null, keystoreId, tokenId, passPhrase)),
+            String::class.java
+        )
+    }
+
+    private fun exchangeTokenForIam(refreshable: Boolean): IamTokenResult {
+        val res = postTokenExchangeForIam(refreshable)
+        assertThat(res.statusCode.is2xxSuccessful).withFailMessage("IAM token exchange failed: ${res.body}").isTrue()
+        return objectMapper.readValue(res.body, IamTokenResult::class.java)
+    }
+
+    @Test
+    fun exchangeTokenForIamIsRejectedWhenActorTokenSubjectDoesNotMatch() {
+        val res = postTokenExchangeForIam(false, "00000000097")
+        assertThat(res.statusCode.value()).isEqualTo(400)
+        assertThat(res.body).contains("invalid_token").contains("invalid actor_token")
+    }
+
+    @Test
+    fun exchangeTokenForIamAccessToken() {
+        val result = exchangeTokenForIam(false)
+        assertThat(result.accessToken).isNotBlank()
+        assertThat(result.tokenType).isEqualToIgnoringCase("Bearer")
+        assertThat(result.validity).isGreaterThan(System.currentTimeMillis())
+        assertThat(SignedJWT.parse(result.accessToken).jwtClaimsSet.issuer).isEqualTo("https://api-acpt.ehealth.fgov.be/auth/realms/healthcare")
+        assertSignedByRealm(result.accessToken!!, "https://api-acpt.ehealth.fgov.be/auth/realms/healthcare")
+    }
+
+    /**
+     * Checks the JWT against the keys published by the realm that issued it (OIDC discovery → jwks_uri)
+     */
+    private fun assertSignedByRealm(token: String, realmUrl: String) {
+        val discovery = objectMapper.readValue(URL("$realmUrl/.well-known/openid-configuration"), Map::class.java)
+        assertThat(discovery["issuer"]).isEqualTo(realmUrl)
+        val jwt = SignedJWT.parse(token)
+        val jwk = JWKSet.load(URL(discovery["jwks_uri"] as String)).getKeyByKeyId(jwt.header.keyID)
+        assertThat(jwk).withFailMessage("No key ${jwt.header.keyID} published by $realmUrl").isNotNull()
+        val verifier = when (jwk) {
+            is RSAKey -> RSASSAVerifier(jwk)
+            is ECKey -> ECDSAVerifier(jwk)
+            else -> throw IllegalStateException("Unsupported realm key type ${jwk.keyType}")
+        }
+        assertThat(jwt.verify(verifier)).isTrue()
+        assertThat(jwt.jwtClaimsSet.issuer).isEqualTo(discovery["issuer"])
+        assertThat(jwt.jwtClaimsSet.expirationTime).isAfter(Date())
+    }
+
+    @Test
+    fun exchangeTokenForIamRefreshToken() {
+        val result = exchangeTokenForIam(true)
+        assertThat(result.accessToken).isNotBlank()
+        assertThat(result.refreshToken).isNotBlank()
+        assertThat(result.refreshValidity).isGreaterThan(System.currentTimeMillis())
     }
 
     @Test

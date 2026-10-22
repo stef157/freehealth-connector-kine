@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.servlet.HandlerMapping
 import org.taktik.connector.technical.exception.SoaErrorException
 import org.taktik.connector.technical.exception.TechnicalConnectorException
+import org.taktik.freehealth.middleware.exception.IamTokenExchangeException
 import org.taktik.freehealth.middleware.exception.MissingKeystoreException
 import org.taktik.freehealth.middleware.exception.MissingTokenException
 import org.taktik.freehealth.middleware.exception.UnauthorizedException
@@ -53,6 +54,11 @@ class ExceptionHandlers {
             ExceptionDto(HttpStatus.BAD_REQUEST, exception, request.servletPath).toResponseEntity().also {
                 log.warn("Bad request on ${request.servletPath}: ${exception.message}", exception)
             }
+
+    @ExceptionHandler(IamTokenExchangeException::class)
+    fun handleIamTokenExchangeException(request: HttpServletRequest, exception: IamTokenExchangeException) =
+            ExceptionDto(exception.status, exception, request.servletPath).toResponseEntity()
+                .also { report(request, exception, it) }
 
     @ExceptionHandler(SOAPFaultException::class)
     fun handleSoapFaultException(request: HttpServletRequest, exception: SOAPFaultException) =

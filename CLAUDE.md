@@ -15,7 +15,7 @@ generated JAXB classes and XSD/WSDL resources.
 
 ## Toolchain and build
 
-Gradle 8.13 (wrapper) · Kotlin 2.2.10 · Spring Boot 3.5.13 · Jetty 12 (Tomcat is excluded globally) ·
+Gradle 9.3.0 (wrapper) · Kotlin 2.2.10 · Spring Boot 3.5.13 · Jetty 12 (Tomcat is excluded globally) ·
 **Java 21 target, virtual threads on**. The build is `build.gradle.kts` with its versions in `libs.versions.toml`.
 
 Build with a JDK 21:
@@ -98,7 +98,7 @@ its `/api/index.html` / `/v2/api-docs` are gone.
 ### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
 
 **On 02/10/2026 upstream renamed that branch `main` and made it its default branch.** Sync from
-**`upstream/main`** (merged up to `9fbc96584`, 14/10/2026) — **and still watch `upstream/master`**: it was
+**`upstream/main`** (merged up to `21cab8c94`, 22/10/2026) — **and still watch `upstream/master`**: it was
 thought dead since 24/09, yet PR #120 landed there on 05/10/2026 and not on `main`, and PR #123 again on
 13/10 before upstream carried it over (#124; `master` merged up to `f24b7673d`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
 

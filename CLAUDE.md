@@ -100,7 +100,7 @@ its `/api/index.html` / `/v2/api-docs` are gone.
 **On 02/10/2026 upstream renamed that branch `main` and made it its default branch.** Sync from
 **`upstream/main`** (merged up to `21cab8c94`, 22/10/2026) — **and still watch `upstream/master`**: it was
 thought dead since 24/09, yet PR #120 landed there on 05/10/2026 and not on `main`, and PR #123 again on
-13/10 before upstream carried it over (#124; `master` merged up to `f24b7673d`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
+13/10 before upstream carried it over (#124; `master` merged up to `ff73dcf30`, itself a cherry-pick of `21cab8c94` already on `main`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
 
 The migration merged upstream's branch, which had forked **before** the current master and was five months stale: it
 was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-15407. Merging it *into* our master

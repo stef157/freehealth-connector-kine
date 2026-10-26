@@ -151,7 +151,7 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
             status = "active"
             subType = getCodableConcept(CodingSystemEnum.AGREEMENT_TYPE.codingSystem, subTypeCode)
             use = "preauthorization"
-            if(requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND) billablePeriod = getBillablePeriod(agreementStartDate!!)
+            if(requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND) billablePeriod = getBillablePeriod(requireNotNull(agreementStartDate) { "agreementStartDate is required for $requestType" })
             created = ZonedDateTime.now(mcnTimezone).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"))
             enterer = Reference().apply { reference = "PractitionerRole/PractitionerRole1"}
             if (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE) {
@@ -658,7 +658,7 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
             val serviceRequest1 = mapper.createObjectNode()
             serviceRequest1.put("fullUrl", "urn:uuid:" + uuidGenerator.generateId())
             val prescriptionDateNonNull = prescriptionDate ?: DateTime.now()
-            val resourceNode = mapper.readTree(mapper.writeValueAsString(getServiceRequest("1", "", prescription1!!, "1", numberOfSessionForPrescription1!!, patientFirstName, patientLastName, patientGender, prescriptionDateNonNull, patientSsin, patientIo, patientIoMembership, sctCode, sctDisplay))) as ObjectNode
+            val resourceNode = mapper.readTree(mapper.writeValueAsString(getServiceRequest("1", "", requireNotNull(prescription1) { "a prescription1 attachment is required for $requestType" }, "1", requireNotNull(numberOfSessionForPrescription1) { "numberOfSessionForPrescription1 is required with a prescription" }, patientFirstName, patientLastName, patientGender, prescriptionDateNonNull, patientSsin, patientIo, patientIoMembership, sctCode, sctDisplay))) as ObjectNode
             serviceRequest1.set<JsonNode>("resource", resourceNode)
             val serviceRequestObj = (resourceNode.get("ServiceRequest") as ObjectNode)
             serviceRequestObj.set<JsonNode>("contained", mapper.readTree(mapper.writeValueAsString(Binary(
@@ -675,7 +675,7 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
             val claim = this.getClaim(
                 requestType,
                 claimId = "1",
-                subTypeCode = agreementType!!,
+                subTypeCode = requireNotNull(agreementType) { "agreementType is required for $requestType" },
                 agreementStartDate = agreementStartDate,
                 insuranceRef = insuranceRef,
                 pathologyCode = pathologyCode,

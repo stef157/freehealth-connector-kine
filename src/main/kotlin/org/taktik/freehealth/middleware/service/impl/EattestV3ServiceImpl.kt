@@ -1092,6 +1092,8 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                        }).filterNotNull())
                                 }
                             }, code.requestor?.let { req ->
+                                // Dereferenced five times below with `!!`, a missing hcp was a bare 500 before the send
+                                val hcp = requireNotNull(req.hcp) { "attest.codes[].requestor.hcp is required when a requestor is given" }
                                 ItemType().apply {
                                     ids.add(IDKMEHR().apply {
                                         s = IDKMEHRschemes.ID_KMEHR; sv = "1.0"; value =
@@ -1103,9 +1105,9 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                             ids.add(IDHCPARTY().apply {
                                                 s =
                                                     IDHCPARTYschemes.ID_HCPARTY; sv = "1.0"; value =
-                                                req.hcp!!.idHcParty
+                                                hcp.idHcParty
                                             })
-                                            req.hcp!!.idSsin?.let { ssin ->
+                                            hcp.idSsin?.let { ssin ->
                                                 ids.add(IDHCPARTY().apply {
                                                     s =
                                                         IDHCPARTYschemes.INSS; sv = "1.0"; value = ssin
@@ -1114,10 +1116,10 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                             cds.add(CDHCPARTY().apply {
                                                 s =
                                                     CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
-                                                req.hcp!!.cdHcParty
+                                                hcp.cdHcParty
                                             })
-                                            firstname = req.hcp!!.firstName ?: ""
-                                            familyname = req.hcp!!.lastName ?: ""
+                                            firstname = hcp.firstName ?: ""
+                                            familyname = hcp.lastName ?: ""
                                         }
                                     },
                                        ContentType().apply {

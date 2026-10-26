@@ -202,7 +202,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         val samlFacets = mdaRequest.facets?.map { mapper.map(it, Facet::class.java) }
 
         val attrQueries = mdaRequest.members.map {
-            val inputRef = it.uniqId!!
+            val inputRef = requireNotNull(it.uniqId) { "members[].uniqId is required" }
             val requestId = IdGeneratorFactory.getIdGenerator("xsid").generateId()
             getAttrQuery(inputRef, issueInstant, samlFacets, it.hospitalized, requestType, hcpNihii, it.ssin, it.io, it.ioMembership, startDate, endDate)
         }

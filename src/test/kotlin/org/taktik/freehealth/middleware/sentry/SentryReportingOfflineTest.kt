@@ -89,13 +89,13 @@ class SentryReportingOfflineTest {
     }
 
     @Test
-    fun aBindingFailureAnswers500ButStaysOut() {
+    fun aBindingFailureAnswers400AndStaysOut() {
         val response = handlers.handleException(request("/mda/11111111111", "/mda/{ssin}"),
             org.springframework.web.bind.MissingRequestHeaderException("X-FHC-tokenId",
                 org.springframework.core.MethodParameter(
                     SentryReportingOfflineTest::class.java.getDeclaredMethod("startSentry"), -1)))
 
-        assertThat(response.statusCode.value()).isEqualTo(500)
+        assertThat(response.statusCode.value()).isEqualTo(400)
         assertThat(sent).isEmpty()
     }
 

@@ -2,8 +2,12 @@ package org.taktik.freehealth.middleware.web
 
 import io.sentry.Sentry
 import org.slf4j.LoggerFactory
+import org.springframework.beans.TypeMismatchException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.ErrorResponse
+import org.springframework.web.multipart.MultipartException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.servlet.HandlerMapping
@@ -81,10 +85,23 @@ class ExceptionHandlers {
     fun handleEOFException(request: HttpServletRequest, exception: EOFException) = null //Nothing more to do... Connection closed
 
     @ExceptionHandler(Exception::class)
-    fun handleException(request: HttpServletRequest, exception: Exception) =
-            ExceptionDto(HttpStatus.INTERNAL_SERVER_ERROR, exception, request.servletPath).toResponseEntity()
-                .also { log.error("Unhandled exception on ${request.servletPath}", exception) }
-                .also { report(request, exception, it) }
+    fun handleException(request: HttpServletRequest, exception: Exception): ResponseEntity<ExceptionDto> =
+            requestFailureStatus(exception)?.let { ExceptionDto(it, exception, request.servletPath).toResponseEntity() }
+                ?: ExceptionDto(HttpStatus.INTERNAL_SERVER_ERROR, exception, request.servletPath).toResponseEntity()
+                    .also { log.error("Unhandled exception on ${request.servletPath}", exception) }
+                    .also { report(request, exception, it) }
+
+    /**
+     * The status Spring gives a request it could not bind or route — missing header or parameter, wrong type,
+     * unreadable body, unsupported method, unsatisfiable Accept, unknown path. `ErrorMvcAutoConfiguration` is
+     * excluded and the handler above catches every Exception, so these all answered 500. They happen before any
+     * controller runs, hence before anything is sent: a 4xx says exactly that.
+     */
+    private fun requestFailureStatus(exception: Exception): HttpStatus? = when (exception) {
+        is ErrorResponse -> HttpStatus.resolve(exception.statusCode.value())
+        is TypeMismatchException, is HttpMessageNotReadableException, is MultipartException -> HttpStatus.BAD_REQUEST
+        else -> null
+    }
 
     /**
      * Sends server errors to Sentry, once each; 4xx are the caller's mistake and stay out. The route is tagged by
@@ -92,7 +109,6 @@ class ExceptionHandlers {
      */
     private fun report(request: HttpServletRequest, exception: Exception, response: ResponseEntity<ExceptionDto>) {
         if (!Sentry.isEnabled() || !response.statusCode.is5xxServerError) return
-        if (callerMistakes.any { it.isInstance(exception) }) return
         Sentry.withScope { scope ->
             scope.setTag("route", request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) as? String ?: "unknown")
             scope.setTag("method", request.method)
@@ -111,20 +127,5 @@ class ExceptionHandlers {
 
     companion object {
         private val log = LoggerFactory.getLogger(ExceptionHandlers::class.java)
-
-        /**
-         * Request-binding failures answer 500 through [handleException] — a contract clients already see, kept as is —
-         * but they are the caller's mistake, not a server fault, and would flood the project FHC shares with the
-         * satellite.
-         */
-        private val callerMistakes = listOf(
-            org.springframework.web.bind.ServletRequestBindingException::class.java,
-            org.springframework.web.multipart.MultipartException::class.java,
-            org.springframework.web.multipart.support.MissingServletRequestPartException::class.java,
-            org.springframework.beans.TypeMismatchException::class.java,
-            org.springframework.http.converter.HttpMessageNotReadableException::class.java,
-            org.springframework.web.HttpMediaTypeException::class.java,
-            org.springframework.web.HttpRequestMethodNotSupportedException::class.java
-        )
     }
 }

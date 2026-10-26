@@ -648,19 +648,21 @@ service answers `INVALID_DETAIL_REQUEST: messageVersion invalid (mandatory)`. eA
 
 **askAgreement then completes end to end**: HTTP 200, `acknowledged: true`, a NIP reference in `commonOutput`, and a
 signed FHIR `be-eagreementdemandreply` from the insurer. No decision comes back synchronously — per the CIN scenarios
-the medical adviser's ruling arrives over the async channel, which is still the second batch of work.
+the medical adviser's ruling arrives over the async channel.
 
-Two things remain:
+`consultAgreement` answered `SOA-01002` while `askAgreement` succeeded, so **authorisation is granted per
+operation**: the CIN has to enable ConsultAgreement for the licence.
 
-- `consultAgreement` still answers `SOA-01002` while `askAgreement` succeeds, so **authorisation is granted per
-  operation**: ask the CIN to enable ConsultAgreement for the licence.
-- The insurer returns one FHIR *warning* on the request bundle: `MessageHeader.sender` references
-  `PractitionerRole/PractitionerRole1` while that entry's `fullUrl` is a random `urn:uuid:…`, which breaks Bundle
-  resolution rules. It does not block the request but should be fixed in `EagreementServiceUtilsImpl`.
+The bundle's internal references are fixed: they were relative (`PractitionerRole/PractitionerRole1`…) while every
+`fullUrl` is a `urn:uuid:…`, which MyCareNet reported reference by reference. `157d44ec6` rewrites every reference to
+its entry's `fullUrl`, and `a184b19aa` gives each resource the uuid of its `fullUrl` as id — without that, OA 100
+rejected every claim-ask with `MISSING_MESSAGEHEADER_DESTINATION_NAME` (`EagreementResourceIdsOfflineTest`).
 
-The **async** channel is a separate second batch: the CIN scenarios have the medical adviser's decisions arriving
-asynchronously, FHC points at `genericasync.eagreement.v1`, and the official packaging ships a distinct
-`business-mycareneteagreementasyncv2` module.
+The **async** channel (`/eagreement/async/*`, GenAsync `genericasync.eagreement.v1`) is wired: `19bfd0bf0` made
+`getMessages` answer 200 (it read the DMG package name and required a principal's licence), and `7eec8e89b` sends
+the empty `wsa:To` the CIN catalogue requires and stops asking for tACKs — eAgreement posts synchronously, so the
+channel holds none of ours, and asking without confirming hits the *Repetitive call limitation*. The official
+packaging ships a distinct `business-mycareneteagreementasyncv2` module for reference.
 
 ### eFact
 

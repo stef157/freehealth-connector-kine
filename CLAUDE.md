@@ -256,8 +256,9 @@ default `/acpt/org.taktik.connector.technical.properties`, overridable with the 
 `src/main/resources/acpt/` and `prod/` each hold that file plus the trust stores. `STSService.isAcceptance()` simply
 tests whether `endpoint.sts` contains `-acpt`.
 
-The real `acpt/org.taktik.connector.technical.properties` is gitignored; `*.template.properties` sits next to it.
-Fill in `mycarenet.license.username` / `mycarenet.license.password` with credentials matching the target environment.
+`acpt/org.taktik.connector.technical.properties` is **tracked** (inherited from upstream, so its `.gitignore` entry
+does nothing) and carries upstream's placeholder `mycarenet.license.username=phytaktik` — not a real licence;
+`*.template.properties` sits next to it. The real credentials travel as `-D` (see the licence section), never here.
 
 `MiddlewareApplication.main` creates `/opt/ehealth/{acpt,prod}/` at startup and extracts the truststores there
 (`KEYSTORE_DIR=/opt/ehealth/`), so that path must be writable before the first run. On macOS `/opt` is root-owned, so
@@ -326,7 +327,7 @@ file. So: authenticated user › `-D` system property › properties file.
    (`chapterIV.`, `dmg.`, `genins.`, `mcn.tarification.`, `genericasync.*`) already interpolate
    `${mycarenet.license.*}`, so one pair covers every domain. Note these files live in `src/main/resources`, so the
    licence is **baked into the jar at build time** — change it and you must rebuild the jar *and* the image.
-   `acpt/…properties` is gitignored; **`prod/…properties` is not**, so never put the production password there.
+   **Both `acpt/` and `prod/…properties` are tracked and public**, so never put a real password in either.
 3. **Tests**: `src/test/resources/org/taktik/freehealth/middleware/mycarenet.license` holds the *password only*, as raw
    text, read by `EattestV2/V3ControllerTest` into the `mycarenet.license.password` system property. Write it with no
    trailing newline (`printf '%s' …`): `readText()` does not trim, and only the `McnConfigUtil` path trims later.

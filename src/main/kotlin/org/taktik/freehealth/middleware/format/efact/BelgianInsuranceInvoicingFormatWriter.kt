@@ -74,6 +74,20 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         return null
     }
 
+    /**
+     * A date zone of the invoice, as yyyyMMdd. Read with `!!` twice — the field, then the parse — a missing or
+     * impossible date was a 500 NullPointerException naming nothing; it is a 400 naming the field and the zone.
+     * The value itself is not echoed.
+     */
+    private fun requiredDate(value: Long?, field: String, zone: String): String {
+        val date = try {
+            FuzzyValues.getLocalDateTime(requireNotNull(value) { "$field is required ($zone)" })
+        } catch (e: java.time.DateTimeException) {
+            null
+        }
+        return requireNotNull(date) { "$field is not a valid date ($zone)" }.format(dtf)
+    }
+
     private fun getInsurabilityIdentificationNumber(patient:Patient): String?{
         if(patient.insurabilities.isNotEmpty()){
             return patient.insurabilities[0].identificationNumber
@@ -366,7 +380,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("27", ct1 * 1000 + ct2)
         ws.write("29", relatedInvoiceNumber)
         ws.write("28", invoiceRef)
-        ws.write("32", (if (!patient.ssin!!.isNullOrBlank()) 1 else 0) )
+        ws.write("32", (if (!patient.ssin.isNullOrBlank()) 1 else 0) )
         ws.write("34", relatedBatchSendNumber)
         ws.write("37", relatedDestCode)
         ws.write("41", relatedBatchYearMonth)
@@ -499,8 +513,8 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("2", recordNumber)
         ws.write("3", (icd.percentNorm ?: InvoicingPercentNorm.None).code)
         ws.write("4", icd.codeNomenclature)
-        ws.write("5", FuzzyValues.getLocalDateTime(icd.dateCode!!)!!.format(dtf))
-        ws.write("6a", if(icd.endDateCode != null) FuzzyValues.getLocalDateTime(icd.endDateCode!!)!!.format(dtf) else FuzzyValues.getLocalDateTime(icd.dateCode!!)!!.format(dtf))
+        ws.write("5", requiredDate(icd.dateCode, "items[].dateCode", "ET 50 Z 5"))
+        ws.write("6a", if(icd.endDateCode != null) requiredDate(icd.endDateCode, "items[].endDateCode", "ET 50 Z 6a") else requiredDate(icd.dateCode, "items[].dateCode", "ET 50 Z 6a"))
 
         var affCode = insuranceCode
 
@@ -613,7 +627,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("2", recordNumber)
         ws.write("3", 0)
         ws.write("4", icd.codeNomenclature)
-        ws.write("5", FuzzyValues.getLocalDateTime(icd.dateCode!!)!!.format(dtf))
+        ws.write("5", requiredDate(icd.dateCode, "items[].dateCode", "ET 51 Z 5"))
         ws.write("8a", noSIS)
         ws.write("15", icd.doctorIdentificationNumber)
         if (isDentist && icd.relatedCode !== null) {
@@ -632,7 +646,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
             ) + nf11.format(Math.abs(icd.reimbursedAmount)))
         ws.write("27", (if (isMediprima!!) icd.options?.get("coveringCode") else "0000" + nf3.format(ct1) + nf3.format(ct2)))
         ws.write("42", icd.insuranceRef)
-        ws.write("55", FuzzyValues.getLocalDateTime(icd.insuranceRefDate!!)!!.format(dtf))
+        ws.write("55", requiredDate(icd.insuranceRefDate, "items[].insuranceRefDate", "ET 51 Z 55"))
 
         ws.writeFieldsWithCheckSum()
         return recordNumber+1
@@ -693,7 +707,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
 
         ws.write("2", recordNumber)
         ws.write("4", icd.codeNomenclature)
-        ws.write("5", FuzzyValues.getLocalDateTime(icd.dateCode!!)!!.format(dtf))
+        ws.write("5", requiredDate(icd.dateCode, "items[].dateCode", "ET 52 Z 5"))
         ws.write("7", 0)
         ws.write("8a", noSIS)
         ws.write("14", 0)
@@ -746,7 +760,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         }
 
         ws.write("3", manualEntryReasonValue)
-        ws.write("6a", if (isDeferredCase) "00000000" else FuzzyValues.getLocalDateTime(validatedReadDate!!)!!.format(dtf))
+        ws.write("6a", if (isDeferredCase) "00000000" else requiredDate(validatedReadDate, "items[].eidItem.readDate", "ET 52 Z 6a"))
         ws.write("9", eidItem.readType)
         ws.write("10", eidItem.deviceType)
         ws.write("11", vignetteReason)
@@ -826,7 +840,7 @@ class BelgianInsuranceInvoicingFormatWriter(private val writer: Writer) {
         ws.write("27", (if (fee >= 0) "+" else "-") + nf9.format(Math.abs(fee)))
         ws.write("28", invoiceRef)
         ws.write("30", (if (sup >= 0) "+" else "-") + nf9.format(Math.abs(sup)))
-        ws.write("32", (if (!patient.ssin!!.isNullOrBlank()) 1 else 0) )
+        ws.write("32", (if (!patient.ssin.isNullOrBlank()) 1 else 0) )
         ws.write("38", "+00000000000")
 
         var cs = BigInteger.ZERO

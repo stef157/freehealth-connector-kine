@@ -32,6 +32,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.test.context.junit4.SpringRunner
 import org.taktik.freehealth.middleware.MyTestsConfiguration
+import org.taktik.freehealth.middleware.format.efact.segments.Record20Description
 
 /**
  * `/efact/flatcore` renders the flat file locally: no keystore, no token, no MyCareNet call. Used here to prove that
@@ -187,5 +188,55 @@ class EfactFlatcoreOfflineTest {
         val response = post(body)
         assertThat(response.statusCode.value()).isEqualTo(400)
         assertThat(response.body).contains("empty reason")
+    }
+
+    // An item date was read with `!!` twice, the field then its parse: missing or impossible, a bare 500.
+
+    @Test
+    fun anItemWithoutDateCodeIsANamed400() {
+        val response = post(batch("").replace(""""dateCode": 20260729, """, ""))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("items[].dateCode is required (ET 50 Z 5)")
+    }
+
+    @Test
+    fun anImpossibleDateCodeIsANamed400() {
+        val response = post(batch("").replace(""""dateCode": 20260729""", """"dateCode": 20261345"""))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("items[].dateCode is not a valid date (ET 50 Z 5)")
+    }
+
+    @Test
+    fun anInsuranceRefWithoutItsDateIsANamed400() {
+        val response = post(batch(""", "insuranceRef": "1234567890123""""))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("items[].insuranceRefDate is required (ET 51 Z 55)")
+    }
+
+    /** /efact/flat writes the ET 96 footer from ioFederationCode, read with `!!`; /flatcore does not write it. */
+    @Test
+    fun aFlatFileWithoutIoFederationCodeIsANamed400() {
+        val body = batch("").replace(""""ioFederationCode": "300", """, """"fileRef": "TESTFILE01", """)
+        val response = restTemplate!!.postForEntity("http://localhost:$port/efact/flat", HttpEntity(body, HttpHeaders().apply {
+            contentType = MediaType.APPLICATION_JSON
+            accept = listOf(MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON)
+        }), String::class.java)
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("IoFederationCode cannot be null")
+    }
+
+    /**
+     * ET 20 Z 32 flags whether the patient is identified by a NISS. It was written `patient.ssin!!.isNullOrBlank()`:
+     * the `!!` ran before the test it guarded, so a patient identified only by an insurability number, which the
+     * writer otherwise handles (Z 8a), was a bare 500. Such a patient now writes the flag 0.
+     */
+    @Test
+    fun aPatientWithoutSsinWritesTheFlagZero() {
+        val body = batch("").replace(""""ssin": "86103130262", """, """"insurabilities": [{ "identificationNumber": "22222222222" }], """)
+        assertThat(body).doesNotContain("86103130262")
+        val zone32 = Record20Description.zoneDescriptionsByZone.getValue("32").position - 1
+        val records = flatcore(body)
+        assertThat(records.single { it.startsWith("20") }[zone32]).isEqualTo('0')
+        assertThat(flatcore(batch("")).single { it.startsWith("20") }[zone32]).isEqualTo('1')
     }
 }

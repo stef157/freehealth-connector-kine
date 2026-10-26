@@ -71,6 +71,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
         requireNotNull(batch.batchRef) { "BatchRef cannot be null" }
         requireNotNull(batch.fileRef) { "FileRef cannot be null"}
         requireNotNull(batch.uniqueSendNumber) { "UniqueSendNumber cannot be null" }
+        requireNotNull(batch.ioFederationCode) { "IoFederationCode cannot be null" }
 
         batch.invoices.forEach {
             requireNotNull(it.invoiceNumber) { "One of the invoices has an empty invoice number" }
@@ -275,7 +276,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
                 buildOriginType(
                     samlToken.quality,
                     sanitizedBatch.sender!!.nihii!!.toString().padEnd(11, '0'),
-                    sanitizedBatch.sender!!.ssin!!.toString(),
+                    requireNotNull(sanitizedBatch.sender!!.ssin) { "sender.ssin is required (CommonInput origin)" }.toString(),
                     sanitizedBatch.sender!!.firstName!!,
                     sanitizedBatch.sender!!.lastName!!,
                     fed == "690"

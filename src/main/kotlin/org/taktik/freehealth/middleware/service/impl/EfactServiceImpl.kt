@@ -77,6 +77,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
             requireNotNull(it.invoiceRef) { "One of the invoices has an empty invoice ref" }
             requireNotNull(it.ioCode) { "One of the invoices has an empty io code" }
             requireNotNull(it.patient) { "One of the invoices has an empty patient" }
+            requireNotNull(it.reason) { "One of the invoices has an empty reason" }
         }
 
         val stringWriter = StringWriter()
@@ -110,6 +111,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
             requireNotNull(it.invoiceRef) { "One of the invoices has an empty invoice ref" }
             requireNotNull(it.ioCode) { "One of the invoices has an empty io code" }
             requireNotNull(it.patient) { "One of the invoices has an empty patient" }
+            requireNotNull(it.reason) { "One of the invoices has an empty reason" }
         }
 
         val stringWriter = StringWriter()

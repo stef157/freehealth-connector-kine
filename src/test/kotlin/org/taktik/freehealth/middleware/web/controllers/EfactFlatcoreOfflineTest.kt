@@ -178,4 +178,14 @@ class EfactFlatcoreOfflineTest {
         assertThat(response.statusCode.value()).isEqualTo(400)
         assertThat(response.body).contains("ET 20 Z 42-45")
     }
+
+    /** The reason feeds ET 20 Z 17; read with `!!`, a missing one was a bare 500 naming nothing. */
+    @Test
+    fun anInvoiceWithoutReasonIsANamed400() {
+        val body = batch("").replace(""", "reason": "Other"""", "")
+        assertThat(body).doesNotContain("reason")
+        val response = post(body)
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(response.body).contains("empty reason")
+    }
 }

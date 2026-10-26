@@ -126,8 +126,9 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
     `MemberDataAckDto.date` and `EAgreementList.date` — the async MDA and eAgreement channels. Restored with
     `spring.jackson.serialization.write-dates-as-timestamps=true`. The Joda serializers
     (`yyyyMMdd` / `yyyyMMddHHmmss` numbers) are explicit in `MapperConfiguration` and were never at risk.
-- Unchanged, and **not** a migration regression: a missing mandatory query parameter still answers **500**, not
-  400 (`Required request parameter 'hcpNihii' … is not present`). Verified identical on both versions.
+- Not a migration regression, identical on both versions: a missing mandatory query parameter answered **500**,
+  not 400 (`Required request parameter 'hcpNihii' … is not present`). **Fixed since `141d441a2`** — see
+  *Status codes* in the conventions section.
 - **The riskiest change is not covered by any offline test.** The branch's last three commits replace `SOAPConnection`
   with `java.net.http.HttpClient` (to avoid pinning virtual threads) — i.e. the SOAP transport itself — and they
   postdate the test baseline `MIGRATION_TO_SPRING_3_5_5.md` reports. Only a real acceptance call exercises it, sealing
@@ -178,14 +179,14 @@ The genuinely offline tests — measured, not assumed:
 | test | tests | needs |
 |---|---|---|
 | `AddressbookControllerOfflineTest` | 5 | nothing; boots the app, hits `/ab/search/hcp` and `/v3/api-docs` |
-| `EfactFlatcoreOfflineTest` | 10 | nothing; renders the 920000 flat file |
+| `EfactFlatcoreOfflineTest` | 15 | nothing; renders the 920000 flat file |
 | `Record52AgreementNumberTest` | 20 | nothing; pure ET 52 zone rules |
 | `ValidatorTest` | 3 | nothing |
 | `EagreementServiceUtilsTest` | 19, **3 red** | `test.properties` to exist |
 
 Beyond those, every `*OfflineTest`, every `Record*Test`, `Segment300SenderRequiredTest`, `ErrorLocationPathTest`,
 `ErrorCatalogueReachabilityTest` and `ObservedErrorLocationsTest` run with no network and no certificate:
-**27 suites, 167 tests, all green** on 26/10/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
+**31 suites, 189 tests, all green** on 26/10/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
 From zsh, build the `--tests` list as an array — a space-joined string reaches Gradle as one task name.
 
 Those two Addressbook/Efact suites are the quickest way to check the app still boots (~20 s together). Two traps:
@@ -291,8 +292,8 @@ Spring-side config is `src/main/resources/application.properties` (port 8090, `s
 `sentry/SentryConfiguration.kt` starts the plain `io.sentry:sentry` SDK (**not** the Spring Boot starter, which
 would ship the request) when `SENTRY_DSN` is set, and logs `Sentry disabled: no SENTRY_DSN` otherwise; the DSN
 lives in kine-data's `deploy/fhc/.env` (`FHC_SENTRY_DSN`), never in this public repo. Events go to
-`fisco/kinedesk-satellite` (DE region), tagged `component=fhc`. `ExceptionHandlers` reports **5xx** only — 4xx,
-401 and the request-binding failures that answer 500 (missing header or parameter, multipart…) stay out — tagged with the route **template** (`/mda/{ssin}`), method and status.
+`fisco/kinedesk-satellite` (DE region), tagged `component=fhc`. `ExceptionHandlers` reports **5xx** only — 4xx
+and 401 stay out, request-binding failures included now that they answer their own 4xx — tagged with the route **template** (`/mda/{ssin}`), method and status.
 **One capture sits outside `ExceptionHandlers`**: since upstream PR #120 an async MDA or eAgreement message that
 cannot be decoded no longer fails the call — it comes back as one entry carrying `genericErrors` =
 `DECODING_ERROR` among the readable ones, HTTP 200 — so `SentryReporter.asyncDecodingFailure` reports it from the
@@ -686,6 +687,12 @@ them nullable:
   (`One of the invoices has an empty reason`) since 26/10/2026, checked up front with `invoiceNumber`, `invoiceRef`,
   `ioCode` and `patient` in both `makeFlatFile` and `makeFlatFileCoreWithMetadata`; it was the one field of that
   list left to the `!!` at `EfactServiceImpl.kt:167`, a bare 500 (`anInvoiceWithoutReasonIsANamed400`).
+- `ioFederationCode` (`/flat`, `/batch`: the ET 96 footer), the item dates `dateCode`, `endDateCode`,
+  `insuranceRefDate` (with an `insuranceRef`) and `eidItem.readDate`, and `sender.ssin` (`/batch`) — **named 400s**
+  since `389f3a888`; a date is also refused when impossible (`20261345`), without echoing it.
+- **A patient may have no `ssin`** when identified by `insurabilities[0].identificationNumber`: ET 20 / ET 80 Z 32
+  then write `0`. That was meant all along — Z 8a handles it — but `patient.ssin!!.isNullOrBlank()` dereferenced
+  before testing, so such an invoice was a bare 500.
 
 `isTest = true` stamps field 304 with `9991999` instead of `1999`, which is how the OA tells a test batch apart.
 
@@ -730,9 +737,9 @@ read in Rosa's fork (upstream PR #119). `OtherAccident(90)` joins the enum, `801
 NIHII (starts with `8`, last three digits in a published list), so assigning it does nothing. A test fixture that
 sets it is testing the non-medical-house branch.
 
-`/efact/flat` needs two things `/efact/flatcore` does not: a `fileRef` (`EfactServiceImpl.kt:72`, else a bare 500
+`/efact/flat` needs two things `/efact/flatcore` does not: a `fileRef` (`EfactServiceImpl.kt:72`, else 400
 `FileRef cannot be null`) and an explicit `Accept: text/plain` — without it the endpoint answers
-500 `No acceptable representation`, since `defaultContentType(APPLICATION_JSON)` and `produces = TEXT_PLAIN` do
+**406** (500 `No acceptable representation` until `141d441a2`), since `defaultContentType(APPLICATION_JSON)` and `produces = TEXT_PLAIN` do
 not meet. `sender.phoneNumber` is also capped at 10 positions by ET 300 Z 307.
 
 ### Addressbook and eHealthBox (read paths verified)
@@ -833,6 +840,17 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   `MemberData`/`memberdatav2`, `Mediprima`/`mediprimav2`/`mediprimaUma`. A fix usually belongs in one specific
   version — check which one the caller uses before touching all of them.
 - JSON dates are serialized as `yyyyMMdd` / `yyyyMMddHHmmss` **numbers** (`MapperConfiguration.kt`), not ISO strings.
+- **Status codes: below 500 means nothing was sent.** kine-data (`src/Service/Fhc/FhcFault.php::provesNoSend`)
+  reads any status < 500 as proof the write never left, and may replay it. So an `IllegalArgumentException`
+  (`ExceptionHandlers` → 400) must only be thrown **before** the network call: validate client input with
+  `requireNotNull(x) { "<json path> is required (<zone>)" }` up front, never on a reply. A JAXB failure is a
+  `MarshallingException` — still an `IllegalArgumentException` for DMG, which catches it, but answered **500**
+  (`a57dbc912`): `MarshallerHelper` reads every SOAP response, and it used to answer 400 after the send. A
+  controller's own `@ExceptionHandler(IllegalArgumentException)` wins over the advice — `EagreementController`
+  delegates `MarshallingException` back to it, and a new one must too. Spring's binding and routing failures
+  answer their own 4xx (`ErrorResponse.statusCode`, `TypeMismatch`/`HttpMessageNotReadable`/`Multipart` → 400;
+  `RequestBindingStatusOfflineTest`). Still open: `RetryStrategy` re-POSTs on the next endpoint after an
+  `IOException` reading a reply — a server-side duplicate risk, not yet measured.
 - **A per-endpoint timeout key is suffixed with the last two segments of the endpoint URL**
   (`ConnectionTimeOutHandler.endpointProperty`): `…/GenAsync/eagreement` reads
   `connector.soaphandler.connection.request.timeout.GenAsync.eagreement`. A key matching no endpoint is ignored

@@ -302,7 +302,13 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
         val tack = postResponse.getReturn()
         val success = tack.resultMajor != null && tack.resultMajor == "urn:nip:tack:result:major:success"
 
-        val records = BelgianInsuranceInvoicingFormatReader("unused").parse(content.reader(), false)!!.map { mapper.map(it, Record::class.java) }
+        // The batch is posted by now: an IllegalArgumentException from the mapping would answer 400, which a client
+        // may read as "nothing was sent" and post the batch again.
+        val records = try {
+            BelgianInsuranceInvoicingFormatReader("unused").parse(content.reader(), false)!!.map { mapper.map(it, Record::class.java) }
+        } catch (e: IllegalArgumentException) {
+            throw IllegalStateException("The batch was posted but its records could not be mapped back", e)
+        }
         return EfactSendResponse(success, inputReference, tack, content, records).apply {
             this.mycarenetConversation = MycarenetConversation().apply {
                 this.transactionRequest = MarshallerHelper(Post::class.java, Post::class.java).toXMLByteArray(post).toString(Charsets.UTF_8)

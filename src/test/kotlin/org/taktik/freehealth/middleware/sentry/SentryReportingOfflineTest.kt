@@ -100,6 +100,15 @@ class SentryReportingOfflineTest {
     }
 
     @Test
+    fun anUnmarshallableReplyIsAServerErrorAndIsSent() {
+        val response = handlers.handleMarshallingException(request("/efact/batch", "/efact/batch"),
+            org.taktik.connector.technical.exception.MarshallingException("Unable to (un)marchall class", RuntimeException()))
+
+        assertThat(response.statusCode.value()).isEqualTo(500)
+        assertThat(sent).hasSize(1)
+    }
+
+    @Test
     fun clientErrorsStayOut() {
         handlers.handleIllegalArgumentException(request("/efact/flat", "/efact/flat"),
             IllegalArgumentException("bad batch for 11111111111"))

@@ -1,5 +1,6 @@
 package org.taktik.connector.technical.utils.impl;
 
+import org.taktik.connector.technical.exception.MarshallingException;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -57,7 +58,7 @@ public final class JaxbContextFactory {
 
          return context;
       } catch (JAXBException var3) {
-         throw new IllegalArgumentException("Unable to create jaxbContext for package" + pack.getName());
+         throw new MarshallingException("Unable to create jaxbContext for package" + pack.getName(), var3);
       }
    }
 

@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.servlet.HandlerMapping
+import org.taktik.connector.technical.exception.MarshallingException
 import org.taktik.connector.technical.exception.SoaErrorException
 import org.taktik.connector.technical.exception.TechnicalConnectorException
 import org.taktik.freehealth.middleware.exception.IamTokenExchangeException
@@ -48,6 +49,17 @@ class ExceptionHandlers {
     @ExceptionHandler(MissingKeystoreException::class, MissingTokenException::class, UnauthorizedException::class)
     fun handleUnauthorizedException(request: HttpServletRequest, exception: Exception) =
             ExceptionDto(HttpStatus.UNAUTHORIZED, exception, request.servletPath).toResponseEntity()
+
+    /**
+     * MarshallerHelper reads every SOAP response, so this is mostly thrown after the request left. It is an
+     * IllegalArgumentException for the connector's own callers, but it must not get that one's 400: a client may read
+     * any status below 500 as proof that nothing was sent, and replay an attestation or an invoice batch.
+     */
+    @ExceptionHandler(MarshallingException::class)
+    fun handleMarshallingException(request: HttpServletRequest, exception: MarshallingException) =
+            ExceptionDto(HttpStatus.INTERNAL_SERVER_ERROR, exception, request.servletPath).toResponseEntity()
+                .also { log.error("Unmarshallable message on ${request.servletPath}", exception) }
+                .also { report(request, exception, it) }
 
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgumentException(request: HttpServletRequest, exception: IllegalArgumentException) =

@@ -1,6 +1,7 @@
 package org.taktik.connector.technical.utils;
 
 import org.taktik.connector.technical.enumeration.Charset;
+import org.taktik.connector.technical.exception.MarshallingException;
 import org.taktik.connector.technical.exception.TechnicalConnectorException;
 import org.taktik.connector.technical.utils.impl.AttachmentMarshallerImpl;
 import org.taktik.connector.technical.utils.impl.AttachmentUnmarshallerImpl;
@@ -250,7 +251,7 @@ public class MarshallerHelper<X, Y> {
    }
 
    private static IllegalArgumentException handleException(JAXBException e) {
-      throw new IllegalArgumentException("Unable to (un)marchall class. Reason: " + e, e);
+      throw new MarshallingException("Unable to (un)marchall class. Reason: " + e, e);
    }
 
    private Marshaller getMarshaller() throws JAXBException {

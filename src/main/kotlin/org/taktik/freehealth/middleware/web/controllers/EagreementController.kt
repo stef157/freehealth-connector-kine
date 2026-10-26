@@ -22,6 +22,8 @@ import org.taktik.freehealth.middleware.service.EagreementService
 import org.taktik.freehealth.middleware.service.impl.EagreementServiceImpl
 import java.util.*
 import jakarta.servlet.http.HttpServletRequest
+import org.taktik.connector.technical.exception.MarshallingException
+import org.taktik.freehealth.middleware.web.ExceptionHandlers
 
 /**
  * REST controller for Belgian electronic agreement (eAgreement) operations.
@@ -51,6 +53,12 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
     @ExceptionHandler(IllegalArgumentException::class)
     @ResponseBody
     fun handleBadRequest(req: HttpServletRequest, ex: Exception): String = ex.message ?: "unknown reason"
+
+    // A controller's own handlers win over the advice, and the one above would answer this IllegalArgumentException
+    // with a 400 although the reply that failed to unmarshal came back after the request was sent.
+    @ExceptionHandler(MarshallingException::class)
+    fun handleMarshallingException(req: HttpServletRequest, ex: MarshallingException) =
+        ExceptionHandlers().handleMarshallingException(req, ex)
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     @ExceptionHandler(jakarta.xml.ws.soap.SOAPFaultException::class)

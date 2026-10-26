@@ -151,8 +151,9 @@ was missing PR #104 (eAttest kiné), the record 52 EID / zone 17 work and MS-154
   So KMEHR building, eTEE encryption, XAdES sealing, timestamping and the MyCareNet round trip all work under Java 21
   with the new transport. Two request-shape traps met on the way, unchanged by the migration: MDA needs **`hcpSsin`**
   (without it MyCareNet answers `INCORRECT_INSS_PHYSIOTHERAPIST_SAML` naming an empty SSIN), and
-  `askAgreement` dereferences `prescription1!!`, so a `prescription1` attachment is mandatory despite the signature
-  saying the body is optional — a bare `NullPointerException`, surfaced only because unhandled exceptions are logged.
+  `askAgreement` dereferenced `prescription1!!`, so a `prescription1` attachment was mandatory despite the signature
+  saying the body is optional — a bare `NullPointerException`. Fixed in `00a0294f5`: without a prescription the
+  Bundle carries no ServiceRequest and no `Claim.referral` (CIN step 6.1.1, `EagreementAskWithoutPrescriptionOfflineTest`).
 
 ## Tests are live integration tests
 
@@ -177,14 +178,14 @@ The genuinely offline tests — measured, not assumed:
 | test | tests | needs |
 |---|---|---|
 | `AddressbookControllerOfflineTest` | 5 | nothing; boots the app, hits `/ab/search/hcp` and `/v3/api-docs` |
-| `EfactFlatcoreOfflineTest` | 9 | nothing; renders the 920000 flat file |
+| `EfactFlatcoreOfflineTest` | 10 | nothing; renders the 920000 flat file |
 | `Record52AgreementNumberTest` | 20 | nothing; pure ET 52 zone rules |
 | `ValidatorTest` | 3 | nothing |
 | `EagreementServiceUtilsTest` | 19, **3 red** | `test.properties` to exist |
 
 Beyond those, every `*OfflineTest`, every `Record*Test`, `Segment300SenderRequiredTest`, `ErrorLocationPathTest`,
 `ErrorCatalogueReachabilityTest` and `ObservedErrorLocationsTest` run with no network and no certificate:
-**27 suites, 166 tests, all green** on 26/10/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
+**27 suites, 167 tests, all green** on 26/10/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
 From zsh, build the `--tests` list as an array — a space-joined string reaches Gradle as one task name.
 
 Those two Addressbook/Efact suites are the quickest way to check the app still boots (~20 s together). Two traps:
@@ -355,7 +356,7 @@ Hard-won details:
 - The `date` **query parameter** is `yyyyMMddHHmmss` (14 digits), unlike `date` inside each `Eattest.EattestCode`,
   which is `yyyyMMdd`. Passing 8 digits fails with `Value 0 for monthOfYear must be in the range [1,12]`.
 - **Prefer omitting `date` entirely.** The KMEHR `request/id` is `<nihii>.<refDateTime>` where
-  `refDateTime = dateTime(date) ?: now` (`EattestV3ServiceImpl.kt:167`), while `CommonInput.inputReference` is always
+  `refDateTime = dateTime(date) ?: now` (`EattestV3ServiceImpl.kt:654`), while `CommonInput.inputReference` is always
   `now` on the server clock (`InputReference()`). Supplying a `date` from another clock/timezone desynchronises them and
   MyCareNet answers `/SendTransactionRequest/request/id — La valeur de l'identification de la requête est incohérente
   avec celle du Web Service`.
@@ -442,7 +443,7 @@ what really arrives.
 
 ### Calling MDA (Member Data)
 
-`GET /mda/{ssin}` requests four default facets (`MemberDataServiceImpl.kt:814`), including
+`GET /mda/{ssin}` requests four default facets (`MemberDataServiceImpl.kt:829`), including
 `urn:be:cin:nippin:referencePharmacy` — which a physiotherapist is **not authorised to read**. The call then fails with
 a SAML `AttributeQueryError` / `UNAUTHORIZED_FACET`. Use `POST /mda/{ssin}` instead and pass only the facets the
 profession may read; for insurability that is:
@@ -457,7 +458,7 @@ assertions. Verified against scenario 1 of the CIN test procedure.
 
 Two traps when reading an MDA failure:
 
-- **Facet ids must be the full URN.** `MemberDataServiceImpl.kt:814` is `facets ?: listOf(defaults)` — a client-supplied
+- **Facet ids must be the full URN.** `MemberDataServiceImpl.kt:829` is `facets ?: listOf(defaults)` — a client-supplied
   facet id goes into the `AttributeQuery` verbatim, with no prefixing. Sending `"insurability"` instead of
   `urn:be:cin:nippin:insurability` gets the whole query rejected.
 - **Read `detailCode`, never `msgFr`** — on MDA, unlike eAttest above. The error text is rendered locally
@@ -500,7 +501,7 @@ the URN in the predicate surviving because it sits between quotes. `MemberDataEr
   `Location`**, which returns on `errorUrl?.let`. So uid 68 `MUTATION` and uid 96 `ONLY_FIVE_PERIODS_RETURNED` were
   not rendered before and are not rendered now. Should MyCareNet ever send one with a location, it will now come back
   as its real entry instead of the generic one — and `value` would then hold the **whole serialised
-  `AttributeQuery`**, SSIN included (`:924`, `childNodes.length > 1`), which is a reason not to show `value` blindly.
+  `AttributeQuery`**, SSIN included (`:939`, `childNodes.length > 1`), which is a reason not to show `value` blindly.
 - **An error whose resolved path matches no entry used to vanish.** The CIN puts `BO_INVALID_REGNBR` and
   `BO_UNKNOWN_REGNBR` at path `/`, which a rebuilt `base` never equals, and MDA was the one copy with no "nothing
   matched" branch, so the error returned an empty set. `f95492b2a` calls that a consequence of the resolution work;
@@ -566,8 +567,8 @@ whose location arrives without the `not(…)` the CIN's xpath column gives it �
 The strictness is deliberately not aligned: it is the tighter of the two forms.
 
 `requestType` and `hcpQuality` do not affect this. The `requestType` query parameter is only consumed by the default
-facet list (line 819) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`
-(`buildOriginType`, line 533), never into the `AttributeQuery`, which identifies the practitioner solely through
+facet list (line 834) — passing a `facets` body ignores it — and `hcpQuality` goes into `CommonInput`/`origin`
+(`buildOriginType`, line 546), never into the `AttributeQuery`, which identifies the practitioner solely through
 `issuer` = `urn:be:cin:nippin:nihii11` + the NIHII padded to 11 digits.
 
 **Two locations MyCareNet really sent, measured 07/09/2026 — the first real MDA errors this work has
@@ -591,7 +592,7 @@ The same run measured the `Success` path unchanged: the six CIN test NISS with t
 **The coverage window is `date` / `endDate`, in epoch milliseconds.** Unlike `requestType`, those two query parameters
 are honoured whether the facets come from the body or from the defaults: `getAttrQuery` always writes them to
 `Subject/SubjectConfirmation/SubjectConfirmationData/@NotBefore` and `@NotOnOrAfter`
-(`MemberDataServiceImpl.kt:862-872`) — the XPath the catalogue indexes uid 53 to 59 on. There is no facet `Dimension`
+(`MemberDataServiceImpl.kt:877-889`) — the XPath the catalogue indexes uid 53 to 59 on. There is no facet `Dimension`
 for the period.
 
 The trap is the unit. `MemberDataController.kt:78` does `Instant.ofEpochMilli(date)`, on all six MDA routes — while
@@ -600,7 +601,7 @@ eAttest v3 takes `yyyyMMddHHmmss` and `MapperConfiguration` serializes JSON date
 `PERIOD_TOO_FAR_IN_PAST` (uid 59, *"Request more than 5 years in the past"*) and `date=20260801&endDate=20260831` asks
 for a **30 ms** window in 1970, answering `Success` with zero assertions and no error at all. Pass real millis
 (`2021-08-25` = `1629849600000`), and pass **both**: the `endDate` default is `truncate(startDate to day) + 1 day`
-(line 83), so a lone `date` five years back asks for one day five years ago, not the last five years.
+(`MemberDataController.kt:90`), so a lone `date` five years back asks for one day five years ago, not the last five years.
 
 The bounds come back on the same assertions, as `Assertion/Conditions/@NotBefore` / `@NotOnOrAfter` — no extra facet.
 Two `Success` / `PartialAnswer` warnings matter once the window widens and must not be read as plain success: uid 96
@@ -676,12 +677,15 @@ Transport works: `GET /efact/{nihii}/{language}` (GenAsync message pull) returns
 token — no SOA fault, the mailbox is simply empty until something is sent.
 
 `POST /efact/flat/test` renders the 920000 flat file locally, with no network call and no auth headers — the fastest
-way to validate an `InvoicesBatch` before sending it. Two fields are dereferenced with `!!` and are effectively
-mandatory although the DTO types them nullable, each costing a bare `KotlinNullPointerException` (HTTP 500, no
-message):
+way to validate an `InvoicesBatch` before sending it. Some fields are effectively mandatory although the DTO types
+them nullable:
 
-- `sender.phoneNumber` (`BelgianInsuranceInvoicingFormatWriter.kt:154`)
-- `invoice.reason` — an `InvoicingTreatmentReasonCode`, use `"Other"` for ordinary care (`EfactServiceImpl.kt:165`)
+- `sender.lastName`, `.firstName`, `.phoneNumber` (ET 300 Z 305-307) — a **named 400** since `78818c944`
+  (`requireNotNull`, `Segment300SenderRequiredTest`); they used to be `!!` and a bare 500.
+- `invoice.reason` — an `InvoicingTreatmentReasonCode`, use `"Other"` for ordinary care. A **named 400**
+  (`One of the invoices has an empty reason`) since 26/10/2026, checked up front with `invoiceNumber`, `invoiceRef`,
+  `ioCode` and `patient` in both `makeFlatFile` and `makeFlatFileCoreWithMetadata`; it was the one field of that
+  list left to the `!!` at `EfactServiceImpl.kt:167`, a bare 500 (`anInvoiceWithoutReasonIsANamed400`).
 
 `isTest = true` stamps field 304 with `9991999` instead of `1999`, which is how the OA tells a test batch apart.
 

@@ -93,7 +93,8 @@ it carries the four traps that were paid for once (the session `DOCKER_CONFIG` m
 builder; gzip buys 0.6 % and is not worth a step).
 
 API docs are served by **springdoc** (OpenAPI 3): UI at `/swagger-ui.html`, descriptor at `/v3/api-docs`. SpringFox and
-its `/api/index.html` / `/v2/api-docs` are gone.
+its `/api/index.html` / `/v2/api-docs` are gone. `WHATSNEW.md`, upstream's API changelog (one entry per merged PR),
+still points at `/api/index.html`; it is left as upstream writes it, to keep merging it conflict-free.
 
 ### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
 
@@ -176,7 +177,7 @@ The genuinely offline tests — measured, not assumed:
 | test | tests | needs |
 |---|---|---|
 | `AddressbookControllerOfflineTest` | 5 | nothing; boots the app, hits `/ab/search/hcp` and `/v3/api-docs` |
-| `EfactFlatcoreOfflineTest` | 5 | nothing; renders the 920000 flat file |
+| `EfactFlatcoreOfflineTest` | 9 | nothing; renders the 920000 flat file |
 | `Record52AgreementNumberTest` | 20 | nothing; pure ET 52 zone rules |
 | `ValidatorTest` | 3 | nothing |
 | `EagreementServiceUtilsTest` | 19, **3 red** | `test.properties` to exist |

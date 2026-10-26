@@ -98,7 +98,7 @@ its `/api/index.html` / `/v2/api-docs` are gone.
 ### What the Spring Boot 3.5 / Java 21 migration cost (upstream branch `spring-boot-3.5.5-virtual-threads`)
 
 **On 02/10/2026 upstream renamed that branch `main` and made it its default branch.** Sync from
-**`upstream/main`** (merged up to `21cab8c94`, 22/10/2026) — **and still watch `upstream/master`**: it was
+**`upstream/main`** (merged up to `89786e34c`, 23/10/2026) — **and still watch `upstream/master`**: it was
 thought dead since 24/09, yet PR #120 landed there on 05/10/2026 and not on `main`, and PR #123 again on
 13/10 before upstream carried it over (#124; `master` merged up to `ff73dcf30`, itself a cherry-pick of `21cab8c94` already on `main`). A commit from that branch is `javax`, so a clean merge of it is not a compiling one.
 

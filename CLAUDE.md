@@ -182,6 +182,11 @@ The genuinely offline tests — measured, not assumed:
 | `ValidatorTest` | 3 | nothing |
 | `EagreementServiceUtilsTest` | 19, **3 red** | `test.properties` to exist |
 
+Beyond those, every `*OfflineTest`, every `Record*Test`, `Segment300SenderRequiredTest`, `ErrorLocationPathTest`,
+`ErrorCatalogueReachabilityTest` and `ObservedErrorLocationsTest` run with no network and no certificate:
+**27 suites, 166 tests, all green** on 26/10/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
+From zsh, build the `--tests` list as an array — a space-joined string reaches Gradle as one task name.
+
 Those two Addressbook/Efact suites are the quickest way to check the app still boots (~20 s together). Two traps:
 
 - **`InferPrescTypeTest` and `CreatePrescriptionTest` are not offline**, despite living next to the others: their

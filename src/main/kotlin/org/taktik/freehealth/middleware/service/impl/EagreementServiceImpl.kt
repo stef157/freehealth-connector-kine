@@ -120,6 +120,15 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
         /** Selects the eAgreement web service: `v1` or `v2`. */
         const val AGREEMENT_VERSION_KEY = "endpoint.agreement.version"
 
+        /**
+         * The Detail's MessageVersion for the chosen service: `V4` on v2, and **none** on v1. `BlobBuilder.build(…, "3.0", …)`
+         * already sets `"3.0"` on every blob, so leaving it alone on v1 is not enough: it must be cleared. Commons v3 has no
+         * such attribute, and before the v2 port the v3 mapper dropped it silently. Measured on the dev, 03/11/2026: the v1
+         * bridge refused the request with `cannot carry Detail/@MessageVersion`.
+         */
+        @JvmStatic
+        fun detailMessageVersion(version: String): String? = if (version == "v1") null else MESSAGE_VERSION
+
         /** `v1` only when asked for explicitly; anything else — absent, blank, unknown — stays on `v2`, today's path. */
         @JvmStatic
         fun agreementVersionOf(value: String?): String = if (value?.trim()?.lowercase() == "v1") "v1" else "v2"
@@ -262,7 +271,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                             "encryptedForKnownBED"
                         )
                 blob.messageName = "eAgreement-ask"
-                if (agreementVersion() == "v2") blob.messageVersion = MESSAGE_VERSION
+                blob.messageVersion = detailMessageVersion(agreementVersion())
 
                 val principal = SecurityContextHolder.getContext().authentication?.principal as? User
                 val packageInfo = McnConfigUtil.retrievePackageInfo("agreement", principal?.mcnLicense, principal?.mcnPassword, principal?.mcnPackageName)
@@ -445,7 +454,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                             "encryptedForKnownBED"
                         )
                 blob.messageName = "eAgreement-consult"
-                if (agreementVersion() == "v2") blob.messageVersion = MESSAGE_VERSION
+                blob.messageVersion = detailMessageVersion(agreementVersion())
 
                 val principal = SecurityContextHolder.getContext().authentication?.principal as? User
                 val packageInfo = McnConfigUtil.retrievePackageInfo("agreement", principal?.mcnLicense, principal?.mcnPassword, principal?.mcnPackageName)

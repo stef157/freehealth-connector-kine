@@ -142,6 +142,48 @@ class EagreementV1BridgeOfflineTest {
         assertThat(v2.`return`.detail.value).isEqualTo(detailContent)
     }
 
+    /**
+     * The production path, measured on the dev on 03/11/2026: `BlobBuilder.build(…, "3.0", …)` sets MessageVersion "3.0" on
+     * every blob (`BlobBuilderImpl`, `setMessageVersion`), and `BlobMapper` v4 copies it to the Detail. Leaving it there on v1
+     * made the bridge refuse the request. `detailMessageVersion("v1")` must clear it.
+     */
+    private fun builtBlob() = org.taktik.connector.business.mycarenetdomaincommons.domain.Blob().apply {
+        content = detailContent
+        id = "blob1"
+        contentEncoding = "none"
+        contentType = "text/xml"
+        contentEncryption = "encryptedForKnownBED"
+        messageVersion = "3.0"
+    }
+
+    @Test
+    fun theBuilderVersionLeftInPlaceIsWhatTheDevRefused() {
+        val request = v2Request().apply {
+            detail = org.taktik.connector.business.mycarenetcommons.mapper.v4.BlobMapper.mapBlobTypefromBlob(builtBlob())
+        }
+        assertThatThrownBy { AgreementV1Bridge.v1Xml(request) }.hasMessageContaining("MessageVersion")
+    }
+
+    @Test
+    fun onV1TheBuilderVersionIsClearedAndTheRequestGoesOut() {
+        val blob = builtBlob().apply { messageVersion = EagreementServiceImpl.detailMessageVersion("v1") }
+        val request = v2Request().apply {
+            detail = org.taktik.connector.business.mycarenetcommons.mapper.v4.BlobMapper.mapBlobTypefromBlob(blob)
+        }
+        assertThat(AgreementV1Bridge.v4OnlyContent(request)).isEmpty()
+        assertThat(wireXml(request)).doesNotContain("MessageVersion")
+        System.getenv("EAGREEMENT_V1_XSD")?.let(::File)?.takeIf { it.isFile }?.let { xsd ->
+            SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema(xsd).newValidator()
+                .validate(StreamSource(StringReader(wireXml(request))))
+        }
+    }
+
+    @Test
+    fun onV2TheDetailCarriesV4() {
+        assertThat(EagreementServiceImpl.detailMessageVersion("v2")).isEqualTo("V4")
+        assertThat(EagreementServiceImpl.detailMessageVersion("v1")).isNull()
+    }
+
     @Test
     fun v1OnlyWhenAskedForExplicitly() {
         assertThat(EagreementServiceImpl.agreementVersionOf(null)).isEqualTo("v2")

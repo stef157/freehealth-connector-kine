@@ -614,6 +614,10 @@ NISS2 + accord REF2 + codes `567011` and `567033`).
 
 ### eAgreement: v1 is the physiotherapists' version, v2 is the speech therapists'
 
+> ⚠️ This title quotes eHealth's service page. It is not a measured fact. Physiotherapy requests *did* go through
+> the v2 port and were answered by OA 100 in acceptance, and no `askAgreement` v1 has been measured yet: see the
+> 03/11/2026 note further down this section.
+
 **Correction, 03/11/2026 (Stéphane): eAgreement v1 is meant for physiotherapists — requests for physiotherapy
 care — and eAgreement v2 is meant, initially, for speech therapists (logopèdes).** Everything below up to the
 async paragraph was written on the opposite premise ("physiotherapists belong to v2"), and kine-data's backend

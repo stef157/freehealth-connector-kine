@@ -112,6 +112,14 @@ class AgreementV1Bridge(private val v1: V1AgreementService = AgreementServiceImp
             return v1
         }
 
+        /** The v1 XML that goes on the wire: the v1 object `toV1` returns, marshalled again. For the conversation pieces. */
+        @JvmStatic
+        fun wireXml(request: SendRequestType): String = when (request) {
+            is AskAgreementRequest -> marshal(toV1(request, V1AskAgreementRequest::class.java))
+            is ConsultAgreementRequest -> marshal(toV1(request, V1ConsultAgreementRequest::class.java))
+            else -> error("eAgreement v1: no wire form for ${request.javaClass.simpleName}")
+        }
+
         /** Every element as `{namespace}localName`, with its count; prefixes do not matter. */
         private fun elementNames(xml: String): List<String> {
             val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }

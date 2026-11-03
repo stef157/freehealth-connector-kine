@@ -209,12 +209,39 @@ class EagreementV1BridgeOfflineTest {
     }
 
     @Test
-    fun v1OnlyWhenAskedForExplicitly() {
-        assertThat(EagreementServiceImpl.agreementVersionOf(null)).isEqualTo("v2")
-        assertThat(EagreementServiceImpl.agreementVersionOf("")).isEqualTo("v2")
-        assertThat(EagreementServiceImpl.agreementVersionOf("v3")).isEqualTo("v2")
+    fun v1ByDefaultAndV2OnlyWhenAskedForExplicitly() {
+        assertThat(EagreementServiceImpl.agreementVersionOf(null)).isEqualTo("v1")
+        assertThat(EagreementServiceImpl.agreementVersionOf("")).isEqualTo("v1")
+        assertThat(EagreementServiceImpl.agreementVersionOf("v3")).isEqualTo("v1")
         assertThat(EagreementServiceImpl.agreementVersionOf("v1")).isEqualTo("v1")
-        assertThat(EagreementServiceImpl.agreementVersionOf(" V1 ")).isEqualTo("v1")
+        assertThat(EagreementServiceImpl.agreementVersionOf("v2")).isEqualTo("v2")
+        assertThat(EagreementServiceImpl.agreementVersionOf(" V2 ")).isEqualTo("v2")
+    }
+
+    /** The conversation piece on v1 says what went on the wire, not the v2 object the service built (03/11/2026). */
+    @Test
+    fun theV1PieceIsTheWireRequest() {
+        val request = v2Request()
+        val piece = EagreementServiceImpl.transactionRequestXml("v1", request)
+        assertThat(piece).contains(AgreementV1Bridge.AGREEMENT_V1, AgreementV1Bridge.CORE_V3)
+        assertThat(piece).doesNotContain(AgreementV1Bridge.AGREEMENT_V2, AgreementV1Bridge.CORE_V4, "MessageVersion")
+        assertThat(canonical(piece)).isEqualTo(canonical(wireXml(request)))
+        assertThat(piece).contains("ReferenceDate")
+    }
+
+    /** consultAgreement goes through the same bridge: its v1 request translates, nothing is lost, and the XSD accepts it. */
+    @Test
+    fun aConsultRequestGoesThroughTheBridgeToo() {
+        val v2 = be.fgov.ehealth.mycarenet.agreement.protocol.v2.ConsultAgreementRequest().apply {
+            val ask = v2Request()
+            commonInput = ask.commonInput; routing = ask.routing; detail = ask.detail; id = ask.id; issueInstant = ask.issueInstant
+        }
+        val wire = AgreementV1Bridge.wireXml(v2)
+        assertThat(wire).contains("ConsultAgreementRequest", AgreementV1Bridge.AGREEMENT_V1).doesNotContain("MessageVersion")
+        System.getenv("EAGREEMENT_V1_XSD")?.let(::File)?.takeIf { it.isFile }?.let { xsd ->
+            SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema(xsd).newValidator()
+                .validate(StreamSource(StringReader(wire)))
+        }
     }
 
     /** What goes on the wire: the v1 JAXB object `toV1` returns, marshalled again — as `GenericWsSender` will. */

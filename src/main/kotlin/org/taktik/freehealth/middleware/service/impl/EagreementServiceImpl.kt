@@ -97,7 +97,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
     private val agreementServiceV2: org.taktik.connector.business.agreementv2.service.AgreementService = org.taktik.connector.business.agreementv2.service.impl.AgreementServiceImpl()
     private val agreementServiceV1: org.taktik.connector.business.agreementv2.service.AgreementService = org.taktik.connector.business.agreement.service.impl.AgreementV1Bridge()
 
-    /** `v1` (the physiotherapist contract, `MyCareNet-eAgreement_v1_1`) or `v2`; read per call, `v2` when unset. */
+    /** `v1` (the physiotherapist contract, `MyCareNet-eAgreement_v1_1`) or `v2`; read per call, **`v1` when unset** (03/11/2026). */
     private fun agreementVersion(): String = agreementVersionOf(config.getProperty(AGREEMENT_VERSION_KEY))
     private val freehealthAgreementService: org.taktik.connector.business.agreementv2.service.AgreementService
         get() = if (agreementVersion() == "v1") agreementServiceV1 else agreementServiceV2
@@ -129,9 +129,24 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
         @JvmStatic
         fun detailMessageVersion(version: String): String? = if (version == "v1") null else MESSAGE_VERSION
 
-        /** `v1` only when asked for explicitly; anything else — absent, blank, unknown — stays on `v2`, today's path. */
+        /**
+         * **`v1` by default since 03/11/2026**: eHealth publishes « eAgreement V1 est destiné aux kinésithérapeutes », the
+         * physiotherapist contract is `MyCareNet-eAgreement_v1_1`, and a physiotherapy `askAgreement` was measured end to
+         * end over v1 that day (OA 100 answered what the MPTI manual expects for 6.1.1). `v2` only when asked for
+         * explicitly; anything else — absent, blank, unknown — is `v1`.
+         */
         @JvmStatic
-        fun agreementVersionOf(value: String?): String = if (value?.trim()?.lowercase() == "v1") "v1" else "v2"
+        fun agreementVersionOf(value: String?): String = if (value?.trim()?.lowercase() == "v2") "v2" else "v1"
+
+        /**
+         * The request as it goes on the wire, for the conversation pieces. On v1 it is the v1 object the bridge builds,
+         * marshalled again — what `GenericWsSender` sends — and not the v2 object the service builds, whose namespaces
+         * (`protocol:v2`, `commons:v4`) never leave the connector.
+         */
+        @JvmStatic
+        fun transactionRequestXml(version: String, request: be.fgov.ehealth.mycarenet.commons.protocol.v4.SendRequestType): String =
+            if (version == "v1") org.taktik.connector.business.agreement.service.impl.AgreementV1Bridge.wireXml(request)
+            else ConnectorXmlUtils.toString(request)
 
         /**
          * Routing reference date, per the CIN "Routing rules (kinés) V1.0" (12/07/2023, map "Routing mutations
@@ -354,7 +369,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 res.isAcknowledged = true
                 res.commonOutput = commonOutput
                 res.mycarenetConversation = MycarenetConversation().apply {
-                    transactionRequest = ConnectorXmlUtils.toString(askAgreementRequest)
+                    transactionRequest = transactionRequestXml(agreementVersion(), askAgreementRequest)
                     transactionResponse = responseXML
                     agreementResponse.soapResponse?.writeTo(this.soapResponseOutputStream())
                     agreementResponse.soapRequest?.writeTo(this.soapRequestOutputStream())
@@ -538,7 +553,8 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 res.isAcknowledged = true
                 res.commonOutput = commonOutput
                 res.mycarenetConversation = MycarenetConversation().apply {
-                    transactionRequest = ConnectorXmlUtils.toString(consultAgreementResponse)
+                    // Upstream recorded the RESPONSE here; the piece is the request (03/11/2026).
+                    transactionRequest = transactionRequestXml(agreementVersion(), consultAgreementRequest)
                     transactionResponse = responseXML
                     consultAgreementResponse.soapResponse?.writeTo(this.soapResponseOutputStream())
                     consultAgreementResponse.soapRequest?.writeTo(this.soapRequestOutputStream())

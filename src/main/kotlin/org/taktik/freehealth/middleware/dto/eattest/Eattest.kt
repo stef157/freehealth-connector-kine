@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.taktik.freehealth.middleware.dto.efact.InvoicingSideCode
 import org.taktik.freehealth.middleware.dto.efact.InvoicingTransplantationCode
 import java.io.Serializable
+import java.math.BigDecimal
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 class Eattest(var codes: List<EattestCode> = listOf()) : Serializable {
@@ -38,6 +39,12 @@ class Eattest(var codes: List<EattestCode> = listOf()) : Serializable {
         var reglementarySupplement: Double? = null,
         var fee: Double? = null, // Sum of the 2 above
         var doctorSupplement: Double? = null,
+        /**
+         * The amount charged to the patient for this code, written as the CGD's `patientpaid` item; the CGA's is
+         * their sum. Absent, the connector keeps writing `reimbursement + reglementarySupplement`. A BigDecimal so
+         * that `"23.63"` — string or number — is read as exactly that, not as a double a cent away (CE 264/265).
+         */
+        var patientPaid: BigDecimal? = null,
         var norm: Int = 0,
         var cardReading: EattestCardReading? = null,
         var requestor: EattestRequestor? = null,

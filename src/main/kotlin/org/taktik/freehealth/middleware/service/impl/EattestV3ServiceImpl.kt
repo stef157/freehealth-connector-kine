@@ -651,6 +651,15 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         referenceDate: Long?,
         decisionReference: String?) : SendTransactionRequest {
 
+        // Before anything is built, so a 400 still means nothing left (CLAUDE.md, "Status codes").
+        attest.codes.forEachIndexed { i, code ->
+            code.patientPaid?.let {
+                require(it.signum() >= 0 && it.stripTrailingZeros().scale() <= 2) {
+                    "attest.codes[$i].patientPaid must be a non-negative amount with at most two decimals"
+                }
+            }
+        }
+
         val refDateTime = dateTime(referenceDate) ?: now
         val theDayBeforeRefDate = refDateTime.plusDays(-1)
 
@@ -808,12 +817,8 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 "patientpaid"
                             })
                             cost = CostType().apply {
-                                decimal =
-                                    BigDecimal.valueOf(attest.codes.sumBy {
-                                        Math.round(
-                                            ((it.reimbursement ?: 0.0) + (it.reglementarySupplement ?: 0.0)) * 100
-                                                  ).toInt()
-                                    }.toLong()).divide(BigDecimal(100L)).setScale(2, RoundingMode.CEILING)
+                                // The sum of the CGD amounts, never a figure of its own: CE 264 rejects any gap.
+                                decimal = attest.codes.fold(BigDecimal.ZERO.setScale(2)) { total, code -> total + patientPaidOf(code) }
                                 unit = UnitType().apply {
                                     cd =
                                         CDUNIT().apply {
@@ -993,12 +998,6 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 })
                                 cds.add(CDITEM().apply { s = CD_ITEM; sv = "1.11"; value = "encounterdatetime" })
                                 contents.add(ContentType().apply { date = dateTime(code.date) ?: refDateTime })
-                                System.out.println("LE CODE REIM + REGSUPP POUR ")
-                                System.out.println(code.riziv)
-                                System.out.println(code.reimbursement)
-                                System.out.println(code.reglementarySupplement)
-                                BigDecimal.valueOf((code.reimbursement ?: 0.0) + (code.reglementarySupplement ?: 0.0))
-                                BigDecimal.valueOf((code.reimbursement ?: 0.0) + (code.reglementarySupplement ?: 0.0)).setScale(2, RoundingMode.CEILING)
                             }, ItemType().apply {
                                 ids.add(IDKMEHR().apply {
                                     s = IDKMEHRschemes.ID_KMEHR; sv = "1.0"; value =
@@ -1009,11 +1008,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                     "patientpaid"
                                 })
                                 cost = CostType().apply {
-                                    decimal =
-                                        BigDecimal.valueOf(
-                                            Math.round(
-                                                ((code.reimbursement ?: 0.0) + (code.reglementarySupplement ?: 0.0)) * 100)
-                                                .toLong()).divide(BigDecimal(100L)).setScale(2, RoundingMode.CEILING)
+                                    decimal = patientPaidOf(code)
                                     unit = UnitType().apply {
                                         cd =
                                             CDUNIT().apply {
@@ -1473,6 +1468,20 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
         }
     }
 
+
+    /**
+     * The amount charged to the patient for one code — the `patientpaid` item of its CGD, and its share of the CGA's.
+     *
+     * The caller's own figure when it gives one. Otherwise what the connector has always written,
+     * `reimbursement + reglementarySupplement` rounded to the cent, so a request without `patientPaid` is unchanged
+     * to the byte. kine-data had to carry the patient's amount in `reimbursement` to get it there (its
+     * `FhcEAttestGateway::amountsFor`); CGM-BE's fork added the same field for "rechthebbende thuis". Tested on null,
+     * not on `> 0`: an explicit 0.00 must be able to leave.
+     */
+    private fun patientPaidOf(code: Eattest.EattestCode): BigDecimal =
+        code.patientPaid?.setScale(2)
+            ?: BigDecimal.valueOf(Math.round(((code.reimbursement ?: 0.0) + (code.reglementarySupplement ?: 0.0)) * 100))
+                .divide(BigDecimal(100L)).setScale(2, RoundingMode.CEILING)
 
     private fun dateTime(intDate: Int?) = intDate?.let {
         DateTime(0).withYear(intDate / 10000).withMonthOfYear((intDate / 100) % 100)

@@ -6,6 +6,7 @@ import be.fgov.ehealth.mycarenet.commons.core.v4.ActorType
 import be.fgov.ehealth.mycarenet.commons.core.v4.BlobType
 import be.fgov.ehealth.mycarenet.commons.core.v4.CareProviderType
 import be.fgov.ehealth.mycarenet.commons.core.v4.CommonInputType
+import be.fgov.ehealth.mycarenet.commons.core.v4.IdType
 import be.fgov.ehealth.mycarenet.commons.core.v4.LicenseType
 import be.fgov.ehealth.mycarenet.commons.core.v4.NihiiType
 import be.fgov.ehealth.mycarenet.commons.core.v4.OriginType
@@ -23,7 +24,13 @@ import org.taktik.freehealth.middleware.service.impl.EagreementServiceImpl
 import java.io.File
 import java.io.StringReader
 import java.util.GregorianCalendar
+import java.util.TimeZone
+import jakarta.xml.bind.JAXBContext
+import java.io.StringWriter
 import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.transform.stream.StreamSource
 import javax.xml.validation.SchemaFactory
@@ -53,14 +60,25 @@ class EagreementV1BridgeOfflineTest {
                     license = LicenseType().apply { username = "user"; password = "secret" }
                     name = ValueRefString().apply { value = "kinedesk" }
                 }
+                siteID = ValueRefString().apply { value = "site-1" }
+                // Populated as `EagreementServiceImpl.askAgreement` builds it: IdType's Nihii is mandatory in v3.
                 careProvider = CareProviderType().apply {
                     nihii = NihiiType().apply { quality = "physiotherapist"; value = ValueRefString().apply { value = "00000000000" } }
+                    physicalPerson = IdType().apply {
+                        name = ValueRefString().apply { value = "Kiné Test" }
+                        ssin = ValueRefString().apply { value = "00000000097" }
+                        nihii = NihiiType().apply { quality = "physiotherapist"; value = ValueRefString().apply { value = "00000000000" } }
+                    }
                 }
             }
         }
         routing = RoutingType().apply {
             careReceiver = EagreementServiceImpl.careReceiverFor("00000000097", null, null)
-            referenceDate = DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
+            // As the service computes it: the routing date of a claim-ask that started in the past.
+            referenceDate = GregorianCalendar().let { cal ->
+                cal.time = EagreementServiceImpl.routingReferenceDate("claim-ask", DateTime().minusDays(10), DateTime()).toDate()
+                DatatypeFactory.newInstance().newXMLGregorianCalendar(cal)
+            }
         }
         detail = BlobType().apply {
             value = detailContent
@@ -133,11 +151,62 @@ class EagreementV1BridgeOfflineTest {
         assertThat(EagreementServiceImpl.agreementVersionOf(" V1 ")).isEqualTo("v1")
     }
 
+    /** What goes on the wire: the v1 JAXB object `toV1` returns, marshalled again — as `GenericWsSender` will. */
+    private fun wireXml(request: AskAgreementRequest): String {
+        val v1 = AgreementV1Bridge.toV1(request, V1AskAgreementRequest::class.java)
+        return StringWriter().also { JAXBContext.newInstance(V1AskAgreementRequest::class.java).createMarshaller().marshal(v1, it) }.toString()
+    }
+
+    /** Namespace-aware shape of an element: prefixes and `xmlns` declarations do not count, everything else does. */
+    private fun canonical(xml: String): String {
+        val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+        val root = factory.newDocumentBuilder().parse(InputSource(StringReader(xml))).documentElement
+        fun walk(e: Element): String {
+            val attributes = (0 until e.attributes.length).map { e.attributes.item(it) }
+                .filter { it.namespaceURI != XMLConstants.XMLNS_ATTRIBUTE_NS_URI }
+                .map { "{${it.namespaceURI ?: ""}}${it.localName}=${it.nodeValue}" }.sorted()
+            val children = (0 until e.childNodes.length).map { e.childNodes.item(it) }
+            val content = children.joinToString("") { if (it is Element) walk(it) else it.textContent.trim() }
+            return "<{${e.namespaceURI}}${e.localName} $attributes>$content</>"
+        }
+        return walk(root)
+    }
+
+    /**
+     * The one normalisation the v1 types apply: v3 maps `ReferenceDate` (`xs:date`) through `XmlDateNoTzAdapter`, which
+     * drops the `+hh:mm` suffix v4's `XMLGregorianCalendar` writes. That is the form a native v1 request carries.
+     */
+    private fun withoutReferenceDateZone(canonical: String): String =
+        canonical.replace(Regex("(ReferenceDate \\[]>\\d{4}-\\d{2}-\\d{2})[+-]\\d{2}:\\d{2}"), "$1")
+
     @Test
-    fun theV1RequestIsValidAgainstTheOfficialSchema() {
+    fun nothingIsLostOrReformattedBetweenTheRewriteAndTheWire() {
+        val request = v2Request()
+        assertThat(canonical(wireXml(request))).isEqualTo(withoutReferenceDateZone(canonical(AgreementV1Bridge.v1Xml(request))))
+    }
+
+    @Test
+    fun theReferenceDayDoesNotDependOnTheJvmZone() {
+        val request = v2Request()
+        val day = request.routing.referenceDate.let { "%04d-%02d-%02d".format(it.year, it.month, it.day) }
+        val saved = TimeZone.getDefault()
+        try {
+            for (zone in listOf("UTC", "Pacific/Kiritimati", "Pacific/Pago_Pago")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone))
+                org.joda.time.DateTimeZone.setDefault(org.joda.time.DateTimeZone.forID(zone))
+                assertThat(wireXml(request)).describedAs(zone).contains(">$day</")
+            }
+        } finally {
+            TimeZone.setDefault(saved)
+            org.joda.time.DateTimeZone.setDefault(org.joda.time.DateTimeZone.forTimeZone(saved))
+        }
+    }
+
+    @Test
+    fun theV1RequestOnTheWireIsValidAgainstTheOfficialSchema() {
         val xsd = System.getenv("EAGREEMENT_V1_XSD")?.let(::File)
         assumeTrue("EAGREEMENT_V1_XSD not set", xsd != null && xsd.isFile)
         val schema = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema(xsd)
-        schema.newValidator().validate(StreamSource(StringReader(AgreementV1Bridge.v1Xml(v2Request()))))
+        schema.newValidator().validate(StreamSource(StringReader(wireXml(v2Request()))))
     }
 }

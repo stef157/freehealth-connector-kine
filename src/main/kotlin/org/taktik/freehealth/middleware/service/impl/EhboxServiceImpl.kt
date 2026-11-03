@@ -52,6 +52,7 @@ import org.taktik.freehealth.middleware.dto.ehbox.MessageResponse
 import org.taktik.freehealth.middleware.dto.ehbox.MessageStatusOperationResponse
 import org.taktik.freehealth.middleware.dto.ehbox.MessagesResponse
 import org.taktik.freehealth.middleware.exception.MissingTokenException
+import org.taktik.freehealth.middleware.sentry.SentryReporter
 import org.taktik.freehealth.middleware.mapper.toDocumentMessage
 import org.taktik.freehealth.middleware.mapper.toMessageDto
 import org.taktik.freehealth.middleware.service.EhboxService
@@ -62,10 +63,12 @@ import org.w3c.dom.NamedNodeMap
 import org.w3c.dom.Node
 import org.w3c.dom.NodeList
 import java.util.UUID
+import org.slf4j.LoggerFactory
 import jakarta.xml.ws.soap.SOAPFaultException
 
 @Service
 class EhboxServiceImpl(private val stsService: STSService, keyDepotService: KeyDepotService) : EhboxService {
+    private val log = LoggerFactory.getLogger(this.javaClass)
     private val freehealthEhboxService: org.taktik.connector.business.ehbox.service.EhboxService =
         org.taktik.connector.business.ehbox.service.impl.EhboxServiceImpl(EhboxReplyValidatorImpl())
     private val consultationMessageBuilder = ConsultationMessageBuilderImpl()
@@ -257,12 +260,12 @@ class EhboxServiceImpl(private val stsService: STSService, keyDepotService: KeyD
                     break
                 }
 
-                result.addAll(response.messages.mapNotNull { msg ->
-                    try {
+                result.addAll(response.messages.map { msg ->
+                    readListedMessage(msg.messageId, {
                         consultationMessageBuilder.buildMessage(
                             KeyStoreCredential(keystoreId, stsService.getKeyStore(keystoreId, passPhrase)!!, "authentication", passPhrase, samlToken.quality), msg
                                                                ).toMessageDto()
-                    } catch (e: EhboxCryptoException) {
+                    }) {
                         alternateKeystores?.mapFirstNotNull {
                             try {
                                 it.uuid?.let { uuid ->
@@ -274,9 +277,7 @@ class EhboxServiceImpl(private val stsService: STSService, keyDepotService: KeyD
                             } catch (_: EhboxCryptoException) {
                                 null
                             }
-                        } ?: ErrorMessage(title = "Impossible to decrypt message using provided Keystores")
-                    } catch (e: Exception) {
-                        null
+                        }
                     }
                 })
                 if (response.messages.size < 100 || (limit != null && result.size >= limit)) {
@@ -294,6 +295,34 @@ class EhboxServiceImpl(private val stsService: STSService, keyDepotService: KeyD
                 MessagesResponse(result, Error(be?.code, be?.messages?.firstOrNull()?.value))
             } ?: MessagesResponse(result, Error("999", e.message))
         }
+    }
+
+    /**
+     * One message of a list, or a placeholder carrying its id — never a hole.
+     *
+     * A message that could not be decrypted already came back as an `ErrorMessage`, but without its id. Any other
+     * failure — and a message type the mapper does not know — returned `null`, and `mapNotNull` dropped it: the box
+     * held a message the caller could not know existed. Now every listed message yields an entry, and with the id
+     * the caller can still move or delete what it cannot read. The failure is logged without content (id and
+     * exception class only) and reported to Sentry.
+     */
+    internal fun readListedMessage(messageId: String?, read: () -> Message?, readWithAlternates: () -> Message?): Message =
+        try {
+            read() ?: ErrorMessage(id = messageId, title = "Unsupported message type", errorCode = "UNSUPPORTED_MESSAGE")
+        } catch (e: EhboxCryptoException) {
+            try {
+                readWithAlternates()
+            } catch (other: Exception) {
+                unreadable(messageId, other)
+            } ?: ErrorMessage(id = messageId, title = "Impossible to decrypt message using provided Keystores", errorCode = "DECRYPT_ERROR")
+        } catch (e: Exception) {
+            unreadable(messageId, e)
+        }
+
+    private fun unreadable(messageId: String?, e: Exception): Message {
+        log.warn("ehbox: message $messageId could not be read (${e.javaClass.name})")
+        SentryReporter.ehboxMessageUnreadable(e)
+        return ErrorMessage(id = messageId, title = "Impossible to read message", errorCode = "READ_ERROR")
     }
 
     override fun moveMessages(

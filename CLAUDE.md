@@ -670,6 +670,23 @@ the medical adviser's ruling arrives over the async channel.
 `consultAgreement` answered `SOA-01002` while `askAgreement` succeeded, so **authorisation is granted per
 operation**: the CIN has to enable ConsultAgreement for the licence.
 
+> ⚠️ **03/11/2026: `SOA-01002` on ConsultAgreement is not an authorisation answer, on v1 or on v2.** Both eHealth
+> cookbooks (v1 §5.2, l. 342-345 of `pdftotext -layout`; v2 §5.2) say it means **no therapeutic link** between the
+> practitioner and the patient, which the ESB checks for a consult. So this paragraph and the correction at the top
+> of the section read it wrong. v1 has only been tried on consult, and **`askAgreement` v1 has never been sent**.
+>
+> **Switch, `c72537e9b`: `endpoint.agreement.version`** (`v1` | `v2`, read per call, default `v2`).
+> - `v1` sends the request the middleware builds with the v2 types through `AgreementV1Bridge`. The bridge rewrites
+>   the three namespaces (agreement v2→v1, commons core and protocol v4→v3) and reads the result back into the v1
+>   JAXB classes; the response takes the same road back.
+> - The endpoint key follows the switch: `endpoint.agreement` for v1, and the baked `acpt` profile already points it
+>   at `…/eAgreement/v1`.
+> - **`MessageVersion` is v2-only**: commons v3 has no such attribute, so it is set only on the v2 path.
+> - The bridge **refuses** any v4-only content rather than drop it: `MessageVersion`, Detail `Reference`/`Issuer`,
+>   `Actor`, CommonInput `Reference`/`Attribute`, Routing `Subject`.
+> - `EagreementV1BridgeOfflineTest` validates the v1 request against the official XSD when `EAGREEMENT_V1_XSD` names
+>   `mycarenet-agreement-protocol-1_1.xsd`.
+
 The bundle's internal references are fixed: they were relative (`PractitionerRole/PractitionerRole1`…) while every
 `fullUrl` is a `urn:uuid:…`, which MyCareNet reported reference by reference. `157d44ec6` rewrites every reference to
 its entry's `fullUrl`, and `a184b19aa` gives each resource the uuid of its `fullUrl` as id — without that, OA 100

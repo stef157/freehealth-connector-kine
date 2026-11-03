@@ -94,7 +94,14 @@ import jakarta.xml.ws.soap.SOAPFaultException
 
 @Service
 class EagreementServiceImpl(private val stsService: STSService, private val keyDepotService: KeyDepotService) : EagreementService {
-    private val freehealthAgreementService: org.taktik.connector.business.agreementv2.service.AgreementService = org.taktik.connector.business.agreementv2.service.impl.AgreementServiceImpl()
+    private val agreementServiceV2: org.taktik.connector.business.agreementv2.service.AgreementService = org.taktik.connector.business.agreementv2.service.impl.AgreementServiceImpl()
+    private val agreementServiceV1: org.taktik.connector.business.agreementv2.service.AgreementService = org.taktik.connector.business.agreement.service.impl.AgreementV1Bridge()
+
+    /** `v1` (the physiotherapist contract, `MyCareNet-eAgreement_v1_1`) or `v2`; read per call, `v2` when unset. */
+    private fun agreementVersion(): String = agreementVersionOf(config.getProperty(AGREEMENT_VERSION_KEY))
+    private val freehealthAgreementService: org.taktik.connector.business.agreementv2.service.AgreementService
+        get() = if (agreementVersion() == "v1") agreementServiceV1 else agreementServiceV2
+    private fun agreementEndpointKey(): String = if (agreementVersion() == "v1") "endpoint.agreement" else "endpoint.agreement2"
 
     private val keyDepotManager = KeyDepotManagerImpl.getInstance(keyDepotService)
     private val config = ConfigFactory.getConfigValidator(emptyList())
@@ -103,8 +110,19 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
     val agreementServiceUtils: EagreementServiceUtilsImpl = EagreementServiceUtilsImpl();
 
     companion object {
-        /** Value the CIN message definition mandates for the Detail's MessageVersion attribute (eAgreement v2). */
+        /**
+         * Value the CIN message definition (eAgreement **v2** workbook) mandates for the Detail's MessageVersion
+         * attribute. **eAgreement v2 only**: commons v3, which v1 uses, has no such attribute, so it is never set on
+         * the v1 path (and [org.taktik.connector.business.agreement.service.impl.AgreementV1Bridge] refuses it).
+         */
         const val MESSAGE_VERSION = "V4"
+
+        /** Selects the eAgreement web service: `v1` or `v2`. */
+        const val AGREEMENT_VERSION_KEY = "endpoint.agreement.version"
+
+        /** `v1` only when asked for explicitly; anything else — absent, blank, unknown — stays on `v2`, today's path. */
+        @JvmStatic
+        fun agreementVersionOf(value: String?): String = if (value?.trim()?.lowercase() == "v1") "v1" else "v2"
 
         /**
          * Routing reference date, per the CIN "Routing rules (kinés) V1.0" (12/07/2023, map "Routing mutations
@@ -244,7 +262,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                             "encryptedForKnownBED"
                         )
                 blob.messageName = "eAgreement-ask"
-                blob.messageVersion = MESSAGE_VERSION
+                if (agreementVersion() == "v2") blob.messageVersion = MESSAGE_VERSION
 
                 val principal = SecurityContextHolder.getContext().authentication?.principal as? User
                 val packageInfo = McnConfigUtil.retrievePackageInfo("agreement", principal?.mcnLicense, principal?.mcnPassword, principal?.mcnPackageName)
@@ -253,7 +271,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     request =
                         RequestType()
                             .apply {
-                                isIsTest = config.getProperty("endpoint.agreement2")?.contains("-acpt") ?: false
+                                isIsTest = config.getProperty(agreementEndpointKey())?.contains("-acpt") ?: false
                             }
                     inputReference = InputReference().inputReference
                     origin = OriginType().apply {
@@ -427,7 +445,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                             "encryptedForKnownBED"
                         )
                 blob.messageName = "eAgreement-consult"
-                blob.messageVersion = MESSAGE_VERSION
+                if (agreementVersion() == "v2") blob.messageVersion = MESSAGE_VERSION
 
                 val principal = SecurityContextHolder.getContext().authentication?.principal as? User
                 val packageInfo = McnConfigUtil.retrievePackageInfo("agreement", principal?.mcnLicense, principal?.mcnPassword, principal?.mcnPackageName)
@@ -436,7 +454,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     request =
                         RequestType()
                             .apply {
-                                isIsTest = config.getProperty("endpoint.agreement2")?.contains("-acpt") ?: false
+                                isIsTest = config.getProperty(agreementEndpointKey())?.contains("-acpt") ?: false
                             }
                     inputReference = InputReference().inputReference
                     origin = OriginType().apply {

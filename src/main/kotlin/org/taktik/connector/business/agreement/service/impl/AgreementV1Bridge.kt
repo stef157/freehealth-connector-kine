@@ -84,11 +84,40 @@ class AgreementV1Bridge(private val v1: V1AgreementService = AgreementServiceImp
         fun v1Xml(request: SendRequestType): String {
             val refused = v4OnlyContent(request)
             check(refused.isEmpty()) { "eAgreement v1 (commons v3) cannot carry ${refused.joinToString()}: these are v2-only" }
-            return V2_TO_V1.fold(marshal(request)) { xml, (from, to) -> xml.replace(from, to) }
+            val rewritten = V2_TO_V1.fold(marshal(request)) { xml, (from, to) -> xml.replace(from, to) }
+            return REFERENCE_DATE.replace(rewritten) { m -> m.groupValues[1] + m.groupValues[2] + m.groupValues[4] }
         }
 
+        /**
+         * `ReferenceDate` is `xs:date`. v4 writes it with its zone (`2026-11-03Z` in a UTC container, `+01:00` in Brussels),
+         * and v3 reads it through `XmlDateNoTzAdapter`, which only strips `+hh:mm`. On a `Z` the adapter failed, and JAXB
+         * dropped the field **silently**: eHealth then answered SOA-03006, `Routing is not complete` (measured on the dev,
+         * 03/11/2026). The date is written here as v3 writes it itself: `yyyy-MM-dd`, no zone.
+         */
+        private val REFERENCE_DATE = Regex("(<(?:[A-Za-z_][\\w.-]*:)?ReferenceDate>)(\\d{4}-\\d{2}-\\d{2})(Z|[+-]\\d{2}:\\d{2})?(</(?:[A-Za-z_][\\w.-]*:)?ReferenceDate>)")
+
+        /**
+         * The v1 request, read back into the v1 classes, with a guard: JAXB drops what it cannot map **without a word**,
+         * which is how ReferenceDate vanished. Every element of the rewritten XML must still be there once the v1 object is
+         * marshalled again; if one is missing, the bridge refuses rather than send an amputated request.
+         */
         @JvmStatic
-        fun <T> toV1(request: SendRequestType, v1Class: Class<T>): T = unmarshal(v1Xml(request), v1Class)
+        fun <T : Any> toV1(request: SendRequestType, v1Class: Class<T>): T {
+            val xml = v1Xml(request)
+            val v1 = unmarshal(xml, v1Class)
+            val before = elementNames(xml).groupingBy { it }.eachCount()
+            val after = elementNames(marshal(v1)).groupingBy { it }.eachCount()
+            val lost = before.filter { (name, count) -> (after[name] ?: 0) < count }.keys
+            check(lost.isEmpty()) { "eAgreement v1: the v1 classes dropped ${lost.joinToString()} — refusing to send an amputated request" }
+            return v1
+        }
+
+        /** Every element as `{namespace}localName`, with its count; prefixes do not matter. */
+        private fun elementNames(xml: String): List<String> {
+            val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+            val all = factory.newDocumentBuilder().parse(org.xml.sax.InputSource(StringReader(xml))).getElementsByTagNameNS("*", "*")
+            return (0 until all.length).map { all.item(it).let { n -> "{${n.namespaceURI}}${n.localName}" } }
+        }
 
         @JvmStatic
         fun <T> toV2(v1Response: Any, v2Class: Class<T>): T =

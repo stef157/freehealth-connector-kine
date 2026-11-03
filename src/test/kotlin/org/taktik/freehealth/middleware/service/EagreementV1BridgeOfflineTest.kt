@@ -184,6 +184,30 @@ class EagreementV1BridgeOfflineTest {
         assertThat(EagreementServiceImpl.detailMessageVersion("v1")).isNull()
     }
 
+    /**
+     * Measured on the dev, 03/11/2026, second run: eHealth answered SOA-03006, `'Routing' is not complete`, ReferenceDate
+     * expected. The container runs in UTC, so v4 writes `2026-11-03Z`. v3's `XmlDateNoTzAdapter` only strips `+hh:mm`, so
+     * it failed on the `Z`, and JAXB dropped the field silently. The request must be BUILT in the zone, not just read.
+     */
+    @Test
+    fun theReferenceDateSurvivesWhenTheRequestIsBuiltInUtc() {
+        val saved = TimeZone.getDefault()
+        try {
+            for (zone in listOf("UTC", "Europe/Brussels", "Pacific/Kiritimati", "Pacific/Pago_Pago")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone))
+                org.joda.time.DateTimeZone.setDefault(org.joda.time.DateTimeZone.forID(zone))
+                val request = v2Request()
+                val day = request.routing.referenceDate.let { "%04d-%02d-%02d".format(it.year, it.month, it.day) }
+                val v1 = AgreementV1Bridge.toV1(request, V1AskAgreementRequest::class.java)
+                assertThat(v1.routing.referenceDate).describedAs(zone).isNotNull()
+                assertThat(wireXml(request)).describedAs(zone).contains(">$day</")
+            }
+        } finally {
+            TimeZone.setDefault(saved)
+            org.joda.time.DateTimeZone.setDefault(org.joda.time.DateTimeZone.forTimeZone(saved))
+        }
+    }
+
     @Test
     fun v1OnlyWhenAskedForExplicitly() {
         assertThat(EagreementServiceImpl.agreementVersionOf(null)).isEqualTo("v2")

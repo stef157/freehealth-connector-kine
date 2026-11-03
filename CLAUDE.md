@@ -671,9 +671,11 @@ the medical adviser's ruling arrives over the async channel.
 operation**: the CIN has to enable ConsultAgreement for the licence.
 
 > ⚠️ **03/11/2026: `SOA-01002` on ConsultAgreement is not an authorisation answer, on v1 or on v2.** Both eHealth
-> cookbooks (v1 §5.2, l. 342-345 of `pdftotext -layout`; v2 §5.2) say it means **no therapeutic link** between the
-> practitioner and the patient, which the ESB checks for a consult. So this paragraph and the correction at the top
-> of the section read it wrong. v1 has only been tried on consult, and **`askAgreement` v1 has never been sent**.
+> cookbooks (v1 §5.2, l. 345-346 of `pdftotext -layout`; v2 §5.2, l. 342-343) say it means **no therapeutic link**
+> between the practitioner and the patient, which the ESB checks for a consult. So this paragraph and the correction at
+> the top of the section read it wrong. v1 has only been tried on consult: the operation is named by the table above
+> (`401dcc966`, "Measured result on `consultList`"). The earlier wording, "against `/eAgreement/v1`", did not name
+> it. **`askAgreement` v1 has never been sent.**
 >
 > **Switch, `c72537e9b`: `endpoint.agreement.version`** (`v1` | `v2`, read per call, default `v2`).
 > - `v1` sends the request the middleware builds with the v2 types through `AgreementV1Bridge`. The bridge rewrites

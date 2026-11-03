@@ -372,9 +372,18 @@ Hard-won details:
 **Reading an eAttest error.** The catalogue entries carry the CIN message, the `uid`, `locFr` and a readable
 `path` (`/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`), plus `value`, the
 offending node **of your own request** — an SSIN, a NIHII, a date, so don't show it to the practitioner
-unintentionally. An error absent from the 158 entries keeps the insurer's own `description` (`234f6e302`).
+unintentionally. An error absent from the 183 entries keeps the insurer's own `description` (`234f6e302`).
 `EattestV3ErrorRenderingOfflineTest` measures the rendering offline, and `f770a0e42` / `08a5771b6` stopped it
 handing back the shared catalogue entry itself.
+
+**The catalogue's source is `BE-KERR-EAT3-ALL … v03r04.xlsx`** (CIN, 225 rows, with an XPath column), on disk under
+`~/Desktop/Kine-Desk/eAttestV3 & Cancellation/level 3/`. `1ea369d2d` took from it the CE it lacked — 230-232,
+246-247, 264-283 — among which the physiotherapist's rejections: CE 267-271, 274, 279 on the decision reference,
+`…/item[decisionreference]/content/id[OAreferencesystemname]` (`nodeDescr` writes an id carrying an `SL` as
+`id[SL]`), and CE 280-282 on the prescription. CE 239-241, 244, 245 are ours and absent from v03r04; they stay.
+v03r04 writes a missing element as a **`[not(…)]` predicate on the last step**, not a `not(…)` step:
+`ErrorLocationPath.namesAMissingElement` covers both, so `value` stays empty — it used to carry the whole
+transaction's text.
 
 **On the one kmehr `url` MyCareNet is observed to send, none of that resolution runs — and it never did.**
 `connector-packaging-*-5.1.0-java/config/kmehrcommons/examples/kmehrResponseWithError.xml` publishes the only
@@ -615,13 +624,14 @@ NISS2 + accord REF2 + codes `567011` and `567033`).
 ### eAgreement: v1 is the physiotherapists' version, v2 is the speech therapists'
 
 > ⚠️ This title quotes eHealth's service page. It is not a measured fact. Physiotherapy requests *did* go through
-> the v2 port and were answered by OA 100 in acceptance, and no `askAgreement` v1 has been measured yet: see the
-> 03/11/2026 note further down this section.
+> the v2 port and were answered by OA 100 in acceptance. One `askAgreement` v1 has been measured since, on 03/11/2026
+> (`a438899d9`), and v1 is the default from that commit on: see the 03/11/2026 notes further down this section.
 
 **Correction, 03/11/2026 (Stéphane): eAgreement v1 is meant for physiotherapists — requests for physiotherapy
 care — and eAgreement v2 is meant, initially, for speech therapists (logopèdes).** Everything below up to the
 async paragraph was written on the opposite premise ("physiotherapists belong to v2"), and kine-data's backend
-was built on it too; `EagreementServiceImpl` is routed to v2 today. So the measurements stand as measurements,
+was built on it too; `EagreementServiceImpl` was routed to v2 until `a438899d9`, and defaults to v1 since
+(`agreementVersionOf`, `EagreementServiceImpl.kt:139`). So the measurements stand as measurements,
 but their reading changes: the `SOA-01002` on `/eAgreement/v1` is an authorisation the licence still lacks
 for v1, **not** the sign of a wrong version, and the v2 port serves speech therapists, not the physiotherapy
 path. Before touching the eAgreement routing, reread the CIN's v1 physiotherapist documentation and check
@@ -679,7 +689,8 @@ operation**: the CIN has to enable ConsultAgreement for the licence.
 > between the practitioner and the patient, which the ESB checks for a consult. So this paragraph and the correction at
 > the top of the section read it wrong. v1 has only been tried on consult: the operation is named by the table above
 > (`401dcc966`, "Measured result on `consultList`"). The earlier wording, "against `/eAgreement/v1`", did not name
-> it. **`askAgreement` v1 has never been sent.**
+> it. **`askAgreement` v1 had never been sent** — until later that day: `a438899d9` records a physiotherapy
+> `askAgreement` measured end to end over v1, OA 100 answering what the MPTI manual expects for 6.1.1.
 >
 > The correction at the top of the section also says "the v2 port serves speech therapists, not the physiotherapy
 > path". **That is not established either.** Physiotherapy requests (`be-eagreementclaim-kine`) did go through the v2
@@ -687,7 +698,8 @@ operation**: the CIN has to enable ConsultAgreement for the licence.
 > physiotherapists' service is open until one `askAgreement` v1 has been measured (kine-data,
 > `docs/rapports/2026-11-03-eagreement-v1-ou-v2-pour-le-kine.md` §5-§6, §11).
 >
-> **Switch, `c72537e9b`: `endpoint.agreement.version`** (`v1` | `v2`, read per call, default `v2`).
+> **Switch, `c72537e9b`: `endpoint.agreement.version`** (`v1` | `v2`, read per call; default `v1` since `a438899d9` —
+> absent, blank or unknown all mean `v1`, only an explicit `v2` selects v2).
 > - `v1` sends the request the middleware builds with the v2 types through `AgreementV1Bridge`. The bridge rewrites
 >   the three namespaces (agreement v2→v1, commons core and protocol v4→v3) and reads the result back into the v1
 >   JAXB classes; the response takes the same road back.
@@ -698,6 +710,13 @@ operation**: the CIN has to enable ConsultAgreement for the licence.
 >   `Actor`, CommonInput `Reference`/`Attribute`, Routing `Subject`.
 > - `EagreementV1BridgeOfflineTest` validates the v1 request against the official XSD when `EAGREEMENT_V1_XSD` names
 >   `mycarenet-agreement-protocol-1_1.xsd`.
+>
+> **Read in a fork, not measured here (03/11/2026): a physiotherapy vendor runs v1 in production.** CGM-BE's fork
+> (`fork-cgm/main`, a physiotherapy software whose tickets say *in productie*) has **no** v2 port at all. It sends
+> `urn:be:fgov:ehealth:mycarenet:agreement:protocol:v1:AskAgreement` (`AgreementServiceImpl.kt:94` there) to
+> `https://services.ehealth.fgov.be/MyCareNet/eAgreement/v1` (`prod/org.taktik.connector.technical.template.properties:540`
+> there), with the same FHIR Bundle builder as ours and no `MessageVersion`, consistent with commons v3. That supports
+> v1 as the physiotherapists' service; it says nothing about their licence, and it replaces no measurement.
 
 The bundle's internal references are fixed: they were relative (`PractitionerRole/PractitionerRole1`…) while every
 `fullUrl` is a `urn:uuid:…`, which MyCareNet reported reference by reference. `157d44ec6` rewrites every reference to

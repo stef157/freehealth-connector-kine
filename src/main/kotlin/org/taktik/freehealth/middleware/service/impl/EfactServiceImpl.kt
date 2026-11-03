@@ -669,6 +669,40 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
         return true
     }
 
+    override fun confirmMessagesByReferences(
+        keystoreId: UUID,
+        tokenId: UUID,
+        passPhrase: String,
+        hcpNihii: String,
+        hcpSsin: String,
+        hcpFirstName: String,
+        hcpLastName: String,
+        references: List<String>
+    ): Boolean {
+        if (references.isEmpty()) {
+            return true
+        }
+        val samlToken =
+            stsService.getSAMLToken(tokenId, keystoreId, passPhrase)
+                ?: throw MissingTokenException("Cannot obtain token for Efact operations")
+
+        val confirmheader = WsAddressingUtil.createHeader("", "urn:be:cin:nip:async:generic:confirm:hash")
+
+        // MsgRefValues first, TAckReferences second. Origin as in confirmMessages (`false`): upstream #129 passes the
+        // Mediprima `true` here, which would send the Mediprima package name and licence for ordinary eFact.
+        val confirm =
+            BuilderFactory.getRequestObjectBuilder("invoicing")
+                .buildConfirmRequestWithReference(
+                    buildOriginType(samlToken.quality, hcpNihii, hcpSsin, hcpFirstName, hcpLastName, false),
+                    references,
+                    listOf()
+                )
+
+        genAsyncService.confirmRequest(samlToken, confirm, confirmheader)
+
+        return true
+    }
+
 
     override fun confirmMediprimaMessages(
         keystoreId: UUID,

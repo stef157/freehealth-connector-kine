@@ -82,6 +82,23 @@ interface EfactService {
         valueHashes: List<String>
     ): Boolean
 
+    /**
+     * Confirms messages by their `Reference` (`MsgRefValues`, the `messageReference` of a loaded message), the
+     * genericAsync v1.2 form. `confirmMessages` sends `MsgHashValues`, which the catalogue limits to v1.1 (§3.3.7) —
+     * the message counterpart of [confirmAcksByReferences]. Upstream PR #129 made the same switch in place, on the
+     * hash route; it is not taken here so that a client holding hashes keeps working.
+     */
+    fun confirmMessagesByReferences(
+        keystoreId: UUID,
+        tokenId: UUID,
+        passPhrase: String,
+        hcpNihii: String,
+        hcpSsin: String,
+        hcpFirstName: String,
+        hcpLastName: String,
+        references: List<String>
+    ): Boolean
+
     fun confirmMediprimaMessages(
         keystoreId: UUID,
         tokenId: UUID,

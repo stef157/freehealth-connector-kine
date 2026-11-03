@@ -186,7 +186,7 @@ The genuinely offline tests — measured, not assumed:
 
 Beyond those, every `*OfflineTest`, every `Record*Test`, `Segment300SenderRequiredTest`, `ErrorLocationPathTest`,
 `ErrorCatalogueReachabilityTest` and `ObservedErrorLocationsTest` run with no network and no certificate:
-**31 suites, 189 tests, all green** on 26/10/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
+**33 suites, 206 tests, all green** on 03/11/2026 (one `./gradlew test --tests '*.<Name>' …` per suite, ~45 s).
 From zsh, build the `--tests` list as an array — a space-joined string reaches Gradle as one task name.
 
 Those two Addressbook/Efact suites are the quickest way to check the app still boots (~20 s together). Two traps:
@@ -779,6 +779,15 @@ sets it is testing the non-medical-house branch.
 `FileRef cannot be null`) and an explicit `Accept: text/plain` — without it the endpoint answers
 **406** (500 `No acceptable representation` until `141d441a2`), since `defaultContentType(APPLICATION_JSON)` and `produces = TEXT_PLAIN` do
 not meet. `sender.phoneNumber` is also capped at 10 positions by ET 300 Z 307.
+
+**Confirming what a pull returned: hashes or references.** `hcpfac_12` is genericAsync **v1.2**, where the
+catalogue (§3.3.2, §3.3.7) replaces `MsgHashValues` / `TAckContents` by `MsgRefValues` / `TAckReferences`. Each form
+has its own route: `/efact/confirm/msgs/` and `/efact/confirm/acks/` send hashes, `/efact/confirm/msgs/refs/` and
+`/efact/confirm/acks/refs/` send references (a message's `messageReference`, a tACK's `reference`). The tACK one is
+measured (07/10/2026, `6ab65286a`); the message one is not yet. **Upstream PR #129 switched the two hash routes to
+references in place**, keeping the `valueHashes` name and confirming messages with `isMediprima = true` (the
+Mediprima package and licence). It merged cleanly here and was neutralised in the merge commit (`bad5e5a78`):
+kine-data sends hashes on those routes, and a clean merge would have changed what they mean without a sound.
 
 ### Addressbook and eHealthBox (read paths verified)
 

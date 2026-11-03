@@ -264,6 +264,32 @@ class EfactController(val efactService: EfactService, val mapper: MapperFacade) 
         )
 
     @Operation(
+        summary = "Confirm eFact messages by reference",
+        description = "Confirms messages by their Reference (genericAsync v1.2, MsgRefValues) — the messageReference of a loaded message. The hash route above sends MsgHashValues, which the catalogue limits to v1.1."
+    )
+    @PutMapping("/confirm/msgs/refs/{nihii}", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
+    fun confirmMessagesByReferences(
+        @PathVariable nihii: String,
+        @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
+        @RequestHeader(name = "X-FHC-tokenId") tokenId: UUID,
+        @RequestHeader(name = "X-FHC-passPhrase") passPhrase: String,
+        @RequestParam ssin: String,
+        @RequestParam firstName: String,
+        @RequestParam lastName: String,
+        @RequestBody references: List<String>
+    ) =
+        efactService.confirmMessagesByReferences(
+            keystoreId = keystoreId,
+            tokenId = tokenId,
+            passPhrase = passPhrase,
+            hcpNihii = nihii,
+            hcpSsin = ssin,
+            hcpFirstName = firstName,
+            hcpLastName = lastName,
+            references = references
+        )
+
+    @Operation(
         summary = "Confirm Mediprima eFact messages",
         description = "Confirms the receipt of Mediprima invoicing response messages from the MyCareNet platform, identified by their value hashes. This prevents the same messages from being returned in subsequent load calls."
     )

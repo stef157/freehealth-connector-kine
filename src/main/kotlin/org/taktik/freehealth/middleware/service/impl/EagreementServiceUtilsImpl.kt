@@ -650,11 +650,18 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
         // A claim-ask may travel WITHOUT a prescription: the CIN test procedure (FR-MPTI-EAGR-KIN V2.0, step
         // 6.1.1) sends one on purpose and expects MISSING_PRESCRIPTION_IN_PHYSIO_CLAIM from the insurer. Then
         // there is no ServiceRequest entry and no Claim.referral — a referral to an absent entry would be a
-        // different defect. Only for ask: the other operations still require their prescription.
-        val askWithoutPrescription = requestType == EagreementServiceImpl.RequestTypeEnum.ASK && prescription1 == null
+        // different defect.
+        //
+        // So may a claim-argue: 1-FR-RULES-EAGR-KINE asks it for "texte libre, copie de prescription ou autre
+        // annexe complémentaire", any one of them, and Claim.referral is 0..1 there (3-EN-DATA-KINE-ALL). It
+        // takes the same shape, not a ServiceRequest emptied of its PDF: be-eagreementservicerequest's mcn-2
+        // ("identifier.empty() implies (supportingInfo.exists() and contained.exists())") rejects that, our
+        // ServiceRequest carrying no identifier. Extend and completeAgreement still require their prescription.
+        val withoutPrescription = prescription1 == null &&
+            (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE)
 
         //Service Request 1
-        if (!askWithoutPrescription && (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND)) {
+        if (!withoutPrescription && (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND)) {
             val serviceRequest1 = mapper.createObjectNode()
             serviceRequest1.put("fullUrl", "urn:uuid:" + uuidGenerator.generateId())
             val prescriptionDateNonNull = prescriptionDate ?: DateTime.now()
@@ -683,7 +690,7 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
                 provider = "PractitionerRole/PractitionerRole1",
                 attachments = attachments
             )
-            if (askWithoutPrescription) claim.referral = null
+            if (withoutPrescription) claim.referral = null
             addEntry("urn:uuid:" + uuidGenerator.generateId(), claim)
         }
 

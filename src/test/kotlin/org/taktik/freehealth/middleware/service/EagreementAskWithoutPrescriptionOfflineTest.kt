@@ -2,6 +2,7 @@ package org.taktik.freehealth.middleware.service
 
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.joda.time.DateTime
 import org.junit.Test
 import org.taktik.freehealth.middleware.service.impl.EagreementServiceImpl
@@ -15,11 +16,17 @@ import org.taktik.freehealth.middleware.service.impl.EagreementServiceUtilsImpl
 class EagreementAskWithoutPrescriptionOfflineTest {
     private val utils = EagreementServiceUtilsImpl()
 
-    private fun ask(prescription: String?, prescriber: String?): ObjectNode = utils.getBundleJSON(
-        requestType = EagreementServiceImpl.RequestTypeEnum.ASK,
+    private fun ask(
+        prescription: String?,
+        prescriber: String?,
+        requestType: EagreementServiceImpl.RequestTypeEnum = EagreementServiceImpl.RequestTypeEnum.ASK,
+        eventCode: String = "claim-ask",
+        insuranceRef: String? = null
+    ): ObjectNode = utils.getBundleJSON(
+        requestType = requestType,
         messageFocusReference = "Claim/Claim1",
         messageEventSystem = EagreementServiceImpl.MessageEventSystemEnum.MESSAGE_EVENTS,
-        messageEventCode = "claim-ask",
+        messageEventCode = eventCode,
         patientFirstName = "Patient",
         patientLastName = "Test",
         patientGender = "male",
@@ -41,7 +48,7 @@ class EagreementAskWithoutPrescriptionOfflineTest {
         agreementType = "physiotherapy-fa",
         numberOfSessionForPrescription1 = prescription?.let { 18f },
         numberOfSessionForPrescription2 = null,
-        insuranceRef = null,
+        insuranceRef = insuranceRef,
         pathologyCode = "fa-6",
         pathologyStartDate = DateTime(2026, 5, 3, 0, 0),
         sctCode = prescription?.let { "91251008" },
@@ -74,5 +81,52 @@ class EagreementAskWithoutPrescriptionOfflineTest {
         val claim = entries.single { it.get("resource").has("Claim") }.get("resource").get("Claim")
 
         assertThat(claim.get("referral").get("reference").asText()).isEqualTo(serviceRequest.get("fullUrl").asText())
+    }
+
+    private fun argue(prescription: String?, prescriber: String?) = ask(
+        prescription, prescriber,
+        requestType = EagreementServiceImpl.RequestTypeEnum.ARGUE,
+        eventCode = "claim-argue",
+        insuranceRef = "12345678901234567890"
+    )
+
+    /**
+     * A claim-argue answers a request for information with "texte libre, copie de prescription ou autre annexe"
+     * (1-FR-RULES-EAGR-KINE): the prescription is one option among three, and Claim.referral is 0..1. It used
+     * to be a 400 for want of `prescription1`. Same shape as the ask — no ServiceRequest at all — because a
+     * ServiceRequest without its PDF breaks mcn-2 of be-eagreementservicerequest.
+     */
+    @Test
+    fun anArgueWithoutAPrescriptionHasNoServiceRequestAndNoReferral() {
+        val resources = resources(argue(prescription = null, prescriber = null))
+
+        assertThat(resources.map { it.first }).doesNotContain("ServiceRequest")
+        val claim = resources.single { it.first == "Claim" }.second
+        assertThat(claim.has("referral")).isFalse
+        assertThat(claim.get("insurance").first().get("preAuthRef").first().asText()).isEqualTo("12345678901234567890")
+    }
+
+    @Test
+    fun anArgueWithAPrescriptionKeepsItsServiceRequestAndReferral() {
+        val bundle = argue(prescription = "JVBERi0=", prescriber = "00000000004")
+        val entries = bundle.get("Bundle").get("entry").toList()
+        val serviceRequest = entries.single { it.get("resource").has("ServiceRequest") }
+        val claim = entries.single { it.get("resource").has("Claim") }.get("resource").get("Claim")
+
+        assertThat(serviceRequest.get("resource").get("ServiceRequest").has("contained")).isTrue
+        assertThat(claim.get("referral").get("reference").asText()).isEqualTo(serviceRequest.get("fullUrl").asText())
+    }
+
+    /** Extend keeps the requirement — and it is a 400 before anything is sent. */
+    @Test
+    fun anExtendWithoutAPrescriptionIsStillRefused() {
+        assertThatThrownBy {
+            ask(
+                prescription = null, prescriber = null,
+                requestType = EagreementServiceImpl.RequestTypeEnum.EXTEND,
+                eventCode = "claim-extend",
+                insuranceRef = "12345678901234567890"
+            )
+        }.isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("prescription1")
     }
 }

@@ -677,6 +677,12 @@ operation**: the CIN has to enable ConsultAgreement for the licence.
 > (`401dcc966`, "Measured result on `consultList`"). The earlier wording, "against `/eAgreement/v1`", did not name
 > it. **`askAgreement` v1 has never been sent.**
 >
+> The correction at the top of the section also says "the v2 port serves speech therapists, not the physiotherapy
+> path". **That is not established either.** Physiotherapy requests (`be-eagreementclaim-kine`) did go through the v2
+> port, and OA 100 answered them in acceptance: the MPTI physiotherapist campaign of October 2026. Whether v2 is *the*
+> physiotherapists' service is open until one `askAgreement` v1 has been measured (kine-data,
+> `docs/rapports/2026-11-03-eagreement-v1-ou-v2-pour-le-kine.md` §5-§6, §11).
+>
 > **Switch, `c72537e9b`: `endpoint.agreement.version`** (`v1` | `v2`, read per call, default `v2`).
 > - `v1` sends the request the middleware builds with the v2 types through `AgreementV1Bridge`. The bridge rewrites
 >   the three namespaces (agreement v2→v1, commons core and protocol v4→v3) and reads the result back into the v1

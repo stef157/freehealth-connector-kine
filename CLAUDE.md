@@ -612,20 +612,29 @@ Two `Success` / `PartialAnswer` warnings matter once the window widens and must 
 Test data for physiotherapists lives in the CIN test procedure PDFs (scenario 8 is the nominal accepted case:
 NISS2 + accord REF2 + codes `567011` and `567033`).
 
-### eAgreement: this connector speaks v1 only
+### eAgreement: v1 is the physiotherapists' version, v2 is the speech therapists'
+
+**Correction, 03/11/2026 (Stéphane): eAgreement v1 is meant for physiotherapists — requests for physiotherapy
+care — and eAgreement v2 is meant, initially, for speech therapists (logopèdes).** Everything below up to the
+async paragraph was written on the opposite premise ("physiotherapists belong to v2"), and kine-data's backend
+was built on it too; `EagreementServiceImpl` is routed to v2 today. So the measurements stand as measurements,
+but their reading changes: the `SOA-01002` on `/eAgreement/v1` is an authorisation the licence still lacks
+for v1, **not** the sign of a wrong version, and the v2 port serves speech therapists, not the physiotherapy
+path. Before touching the eAgreement routing, reread the CIN's v1 physiotherapist documentation and check
+what kine-data actually calls.
 
 `AgreementServiceImpl.kt:94` hard-codes the SOAP actions
 `urn:be:fgov:ehealth:mycarenet:agreement:protocol:**v1**:AskAgreement` / `:ConsultAgreement`, and
-`endpoint.agreement` points at `.../MyCareNet/eAgreement/v1` — even though the payload builder is FHIR-based
-(`Bundle`, `Claim`, `agreement-types`, `nihdi-physiotherapy-pathologysituationcode`), which is v2 vocabulary.
-Measured against acceptance with a physiotherapist certificate:
+`endpoint.agreement` points at `.../MyCareNet/eAgreement/v1`, with a FHIR-based payload builder
+(`Bundle`, `Claim`, `agreement-types`, `nihdi-physiotherapy-pathologysituationcode`) — read at the time as v2
+vocabulary, which the correction above withdraws. Measured against acceptance with a physiotherapist certificate:
 
 - against `/eAgreement/v1` → `SOA-01002: Service call not authorized` (fault `Origin: Consumer`)
 - against `/eAgreement/v2` (overridden via `-Dendpoint.agreement=…`) → `SOA-03004: WS-I compliance failure`,
   i.e. the endpoint exists but rejects the v1 SOAP action/namespace.
 
-So eAgreement **v2**, the version the CIN physiotherapist test procedure targets, needs the v2 protocol binding, not
-just a URL change. The port is small and every ingredient is already here (measured against the official
+eAgreement **v2** needs the v2 protocol binding, not just a URL change (this paragraph called v2 "the version the
+CIN physiotherapist test procedure targets" — wrong, see the correction above). The port is small and every ingredient is already here (measured against the official
 `connector-packaging-generic-5.1.0-java`, which ships `business-mycareneteagreementv2`):
 
 - v2 keeps the **same two operations** (`askAgreement`, `consultAgreement`); only these change:

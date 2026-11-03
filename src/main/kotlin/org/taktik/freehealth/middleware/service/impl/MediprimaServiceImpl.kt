@@ -454,7 +454,7 @@ class MediprimaServiceImpl(val stsService: STSService, keyDepotService: KeyDepot
 
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
             val result = mutableSetOf<MycarenetError>()
 
             val nodes = runCatching {

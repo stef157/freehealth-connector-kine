@@ -1229,7 +1229,7 @@ class DmgServiceImpl(private val stsService: STSService) : DmgService {
 
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
             val xpath = xPathfactory.newXPath()
             val expr: XPathExpression? = try {
                 xpath.compile(ErrorLocationPath.namespaceAgnostic(resolvableUrl))

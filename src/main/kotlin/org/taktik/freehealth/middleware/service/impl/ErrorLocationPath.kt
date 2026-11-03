@@ -86,7 +86,7 @@ object ErrorLocationPath {
      * The CIN error tables name a *missing* element with a `not(…)` **step** — `/AttributeQuery/not(*:Issuer)`,
      * verbatim in `MemberDataErrors.json`, entered from the CIN xpath column — and that is not valid XPath: a
      * function cannot follow `/`. The catalogue already expects the shape to be handled by resolving the
-     * **parent** and matching the `not(…)` through the entry's own `regex`. Measured on all 27 `regex` entries
+     * **parent** and matching the `not(…)` through the entry's own `regex`. Measured on all 31 `regex` entries
      * of `eAttestErrors.json`: the name the regex captures (`patientpaid`, `claim`, `'date'`,
      * `NIHDI-ID-DOC-MEDIA-TYPE`, …) is never the last step of the entry's `path`, which always stops on a
      * `transaction[…]` or an `item[…]`. So the step is dropped here, and the `regex` keeps seeing the original
@@ -94,7 +94,8 @@ object ErrorLocationPath {
      *
      * `not(` is the only step dropped. A node type test — `text()`, `node()` — is legitimate in step position
      * and stays. If the OAs send the predicate form `…[not(…)]` instead, there is no `not(` at step position
-     * and the path comes back unchanged: a safe superset under either hypothesis.
+     * and the path comes back unchanged: a safe superset under either hypothesis. It is the form BE-KERR-EAT3
+     * v03r04 actually publishes; [namesAMissingElement] covers it for `value`.
      */
     fun resolvableSteps(locationPath: String): String {
         var depth = 0
@@ -112,6 +113,44 @@ object ErrorLocationPath {
             i++
         }
         return locationPath
+    }
+
+    /**
+     * Whether a location path names a **missing** element — in which case only its parent resolves, and that
+     * parent's `textContent` (the concatenation of everything it holds: SSIN, dates, amounts) must not be
+     * handed back as the offending `value`.
+     *
+     * Two forms say so. The `not(…)` **step** that [resolvableSteps] drops, and the `[not(…)]` **predicate** on
+     * the last step, which needs no rewrite because it is valid XPath: it selects the parent itself. The second
+     * is not hypothetical — it is the form of the XPath column of `BE-KERR-EAT3-ALL … v03r04` for every
+     * missing-element row (CE 100, 230, 276-278: `…transaction[…cgd…][not(…item[…patientpaid…])]`). Before
+     * this, such a location resolved the whole transaction and returned its text as `value`.
+     *
+     * A `not(` predicate on an **earlier** step only filters an ancestor, and the node the path ends on is
+     * really there, so it does not count.
+     */
+    fun namesAMissingElement(locationPath: String): Boolean {
+        if (resolvableSteps(locationPath) != locationPath) return true
+        var depth = 0
+        var quote = ' '
+        var lastStepHasNot = false
+        var i = 0
+        while (i < locationPath.length) {
+            val c = locationPath[i]
+            when {
+                quote != ' ' -> if (c == quote) quote = ' '
+                c == '\'' || c == '"' -> quote = c
+                c == '[' -> {
+                    if (depth == 0 && locationPath.startsWith("not(", i + 1)) lastStepHasNot = true
+                    depth++
+                }
+                c == '(' -> depth++
+                c == ']' || c == ')' -> depth--
+                c == '/' && depth == 0 -> lastStepHasNot = false
+            }
+            i++
+        }
+        return lastStepHasNot
     }
 
     /**

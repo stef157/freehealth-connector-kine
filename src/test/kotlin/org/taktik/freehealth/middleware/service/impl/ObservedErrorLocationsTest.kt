@@ -140,7 +140,7 @@ class ObservedErrorLocationsTest {
      * example, and its 101 operators come from its own predicates; nothing says a Dmg or an eAttest location
      * is as long. For eAttest v3 the opposite is **measured**: the acceptance smoke of 31/08/2026 returned
      * `uid 51` alone for code 156, `eAttestErrors.json` carries four entries for that code and not one
-     * null-path entry out of 158, and `EattestV3ServiceImpl` has no code-only bypass — so only
+     * null-path entry out of 183, and `EattestV3ServiceImpl` has no code-only bypass — so only
      * `it.path == base` can have matched, which means the real eAttest url compiled and resolved. Its shape
      * is not published; the WARN branches are what will settle it.
      *

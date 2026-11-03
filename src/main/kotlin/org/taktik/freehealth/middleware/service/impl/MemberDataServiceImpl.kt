@@ -904,7 +904,7 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
             // stay empty: the parent holds the SSIN, the dates and the whole facet list, which is neither the
             // offending value nor ours to hand back.
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
             val result = mutableSetOf<MycarenetError>()
 
             val nodes = runCatching {

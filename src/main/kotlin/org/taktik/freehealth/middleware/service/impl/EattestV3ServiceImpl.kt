@@ -1515,11 +1515,11 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             val result = mutableSetOf<MycarenetError>()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
 
-            // A `not(…)` step names a missing element; only its parent can be resolved. `value` then has to
+            // A `not(…)` step or last-step predicate names a missing element; only its parent resolves. `value` has to
             // stay empty: the parent's textContent is the concatenation of everything it holds — SSIN, dates,
             // amounts — which is neither the offending value nor ours to hand back.
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
 
             try {
                 val xpath = xPathFactory.newXPath()
@@ -1596,6 +1596,10 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
             localName == "cd" && node is Element -> {
                 if (node.getAttribute("SL")?.isNotEmpty() == true) "cd[${node.getAttribute("SL")}]" else "cd[${node.getAttribute("S")}]"
             }
+            // BE-KERR-EAT3 v03r04 locates CE 267-271, 274 and 279 on `content/id[@SL="OAreferencesystemname"]`,
+            // the decision reference. Only an id carrying an SL is qualified: the ID-HCPARTY / ID-PATIENT /
+            // ID-KMEHR ids carry none, so every path the catalogue already held is rebuilt as before.
+            localName == "id" && node is Element && node.getAttribute("SL").isNotEmpty() -> "id[${node.getAttribute("SL")}]"
             else -> localName
         }
     }

@@ -263,7 +263,7 @@ class GenInsServiceImpl(val stsService: STSService) : GenInsService {
                 "/GetInsurabilityAsXmlOrFlatRequestType/Request/"
             )
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
             val result = mutableSetOf<MycarenetError>()
 
             val nodes = runCatching {

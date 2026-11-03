@@ -113,4 +113,22 @@ class ErrorLocationPathTest {
         assertThat(ErrorLocationPath.resolvableSteps("/AttributeQuery/Issuer/text()"))
             .isEqualTo("/AttributeQuery/Issuer/text()")
     }
+
+    /**
+     * Whether `value` must stay empty. Both forms of "this element is missing" count — the `not(…)` step and the
+     * `[not(…)]` predicate on the last step, the form of the XPath column of `BE-KERR-EAT3-ALL … v03r04` — and
+     * a `not(` that only filters an ancestor does not.
+     */
+    @Test
+    fun namesAMissingElementSeesBothFormsOnTheLastStepOnly() {
+        assertThat(ErrorLocationPath.namesAMissingElement("/folder/transaction/not(*:patientpaid)")).isTrue()
+        assertThat(ErrorLocationPath.namesAMissingElement(
+            "*[local-name() = 'transaction'][*[local-name() = 'cd'][text()=\"cgd\"]][not(*[local-name() = 'item'][*[local-name() = 'cd'][text()=\"patientpaid\"]])]"
+        )).isTrue()
+
+        assertThat(ErrorLocationPath.namesAMissingElement("/folder/transaction[not(item)]/author")).isFalse()
+        assertThat(ErrorLocationPath.namesAMissingElement("/folder/transaction[cd='cga']/author/hcparty/id")).isFalse()
+        // A literal that reads "[not(" is a literal.
+        assertThat(ErrorLocationPath.namesAMissingElement("/folder/item[cd='[not(x)']")).isFalse()
+    }
 }

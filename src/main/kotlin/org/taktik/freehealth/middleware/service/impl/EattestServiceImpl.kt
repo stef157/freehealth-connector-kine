@@ -912,7 +912,7 @@ class EattestServiceImpl(private val stsService: STSService, private val keyDepo
             val result = mutableSetOf<MycarenetError>()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
 
             try {
                 val xpath = xPathFactory.newXPath()

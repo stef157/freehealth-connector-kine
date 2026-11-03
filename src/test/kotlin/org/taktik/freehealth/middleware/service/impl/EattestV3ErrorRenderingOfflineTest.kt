@@ -56,7 +56,7 @@ import org.springframework.context.annotation.Import
  * first meant a refusal produced no `MycarenetError` at all, so the response came back `iscomplete = false`
  * with `errors = []`: a refusal with no motive, which is the whole diagnostic a caller gets on eAttest.
  *
- * The other half is the catalogue. `/be/errors/eAttestErrors.json` holds 158 (path, code) entries; a pair it
+ * The other half is the catalogue. `/be/errors/eAttestErrors.json` holds 183 (path, code) entries; a pair it
  * does not hold used to render as nothing, discarding the `description` the insurer itself sent.
  */
 @RunWith(SpringRunner::class)
@@ -251,7 +251,7 @@ class EattestV3ErrorRenderingOfflineTest {
      * request qualified — root `ns5:SendTransactionRequest` under `messageservices/protocol/v1`, its children
      * under the default `messageservices/core/v1` — while the catalogue's paths are unprefixed, so the
      * unprefixed name tests matched nothing and every error fell to "xpath invalide", losing `uid`, `path`,
-     * `value` and the catalogue's 158 messages. Resolution now goes through `namespaceAgnostic`.
+     * `value` and the catalogue's messages. Resolution now goes through `namespaceAgnostic`.
      */
     @Test
     fun theCatalogueIsConsultedOnARealMarshalledRequest() {
@@ -417,5 +417,95 @@ class EattestV3ErrorRenderingOfflineTest {
     fun theRewritesAreNoOpsOnTheObservedUrl() {
         assertThat(ErrorLocationPath.namespaceAgnostic(observedUrl)).isEqualTo(observedUrl)
         assertThat(ErrorLocationPath.resolvableSteps(observedUrl)).isEqualTo(observedUrl)
+    }
+
+    /**
+     * A CGD transaction as the service builds it for a physiotherapist under an agreement: one claim, a
+     * prescriber, and the `decisionreference` item whose content id carries `SL="OAreferencesystemname"`.
+     * Same three namespaces as [qualifiedRequest]; the reference and the prescriber are synthetic.
+     */
+    private fun cgdRequest(withPatientPaid: Boolean = true) =
+        ("""<ns5:SendTransactionRequest xmlns:ns5="http://www.ehealth.fgov.be/messageservices/protocol/v1" """ +
+            """xmlns="http://www.ehealth.fgov.be/messageservices/core/v1" """ +
+            """xmlns:ns2="http://www.ehealth.fgov.be/standards/kmehr/schema/v1">""" +
+            "<kmehrmessage><ns2:folder><ns2:transaction>" +
+            """<ns2:cd S="CD-TRANSACTION-MYCARENET" SV="1.0">cgd</ns2:cd>""" +
+            """<ns2:item><ns2:cd S="CD-ITEM-MYCARENET" SV="1.6">claim</ns2:cd></ns2:item>""" +
+            """<ns2:item><ns2:cd S="CD-ITEM" SV="1.11">requestor</ns2:cd>""" +
+            """<ns2:content><ns2:hcparty><ns2:id S="ID-HCPARTY" SV="1.0">22222222222</ns2:id></ns2:hcparty></ns2:content></ns2:item>""" +
+            (if (withPatientPaid) """<ns2:item><ns2:cd S="CD-ITEM-MYCARENET" SV="1.6">patientpaid</ns2:cd>""" +
+                """<ns2:cost><ns2:decimal>0.00</ns2:decimal></ns2:cost></ns2:item>""" else "") +
+            """<ns2:item><ns2:cd S="CD-ITEM-MYCARENET" SV="1.6">decisionreference</ns2:cd>""" +
+            """<ns2:content><ns2:id S="LOCAL" SV="1.0" SL="OAreferencesystemname">12345678901234567890</ns2:id></ns2:content></ns2:item>""" +
+            "</ns2:transaction></ns2:folder></kmehrmessage></ns5:SendTransactionRequest>").toByteArray()
+
+    /** The XPath column of BE-KERR-EAT3 v03r04 for CE 267-271, 274 and 279, verbatim. */
+    private val decisionReferenceUrl =
+        """*[local-name() = 'SendTransactionRequest']/*[local-name() = 'kmehrmessage']/*[local-name() = 'folder']/*[local-name() = 'transaction'][*[local-name() = 'cd'][text()="cgd"]]/*[local-name() = 'item'][*[local-name() = 'cd'][text()="decisionreference"]]/*[local-name() = 'content']/*[local-name() = 'id'][@SL="OAreferencesystemname"]"""
+
+    /**
+     * **CE 267 — "La référence de la décision médicale n'existe pas dans l'OA" — scenario 2 of the CIN
+     * physiotherapist procedure `FR-MPTI-EAT3-KIN` V1.0.** The catalogue held none of the decision-reference
+     * codes, so these rejections came back with the insurer's own description and no `uid`. Reaching the entry
+     * takes both halves: the entry itself, and `nodeDescr` writing an id that carries an `SL` as `id[SL]`.
+     */
+    @Test
+    fun aDecisionReferenceErrorReachesItsCatalogueEntry() {
+        val error = service.errorsOf(
+            listOf(acknowledgeError(code = "267", scheme = CDERRORMYCARENETschemes.CD_ERROR, url = decisionReferenceUrl)),
+            cgdRequest()
+        ).single()
+
+        assertThat(error.uid).isEqualTo("167")
+        assertThat(error.path).isEqualTo(
+            "/SendTransactionRequest/kmehrmessage/folder/transaction[cgd]/item[decisionreference]/content/id[OAreferencesystemname]"
+        )
+        assertThat(error.msgFr).isEqualTo("La référence de la décision médicale n'existe pas dans l'OA")
+        assertThat(error.value)
+            .describedAs("the decision reference of our own request")
+            .isEqualTo("12345678901234567890")
+    }
+
+    /** Every decision-reference code of the procedure lands on its own entry, not on a neighbour's. */
+    @Test
+    fun eachDecisionReferenceCodeHasItsOwnEntry() {
+        val uids = listOf("267", "268", "269", "270", "271", "274", "279").associateWith { code ->
+            service.errorsOf(
+                listOf(acknowledgeError(code = code, scheme = CDERRORMYCARENETschemes.CD_ERROR, url = decisionReferenceUrl)),
+                cgdRequest()
+            ).single().uid
+        }
+        assertThat(uids).containsExactlyInAnyOrderEntriesOf(
+            mapOf("267" to "167", "268" to "168", "269" to "169", "270" to "170", "271" to "171", "274" to "174", "279" to "179")
+        )
+    }
+
+    /** CE 280 — prescription unknown to the insurer — is located on the requestor item itself. */
+    @Test
+    fun anUnknownPrescriptionReachesTheRequestorEntry() {
+        val url =
+            """*[local-name() = 'SendTransactionRequest']/*[local-name() = 'kmehrmessage']/*[local-name() = 'folder']/*[local-name() = 'transaction'][*[local-name() = 'cd'][text()="cgd"]]/*[local-name() = 'item'][*[local-name() = 'cd'][text()="requestor"]]"""
+        val error = service.errorsOf(
+            listOf(acknowledgeError(code = "280", scheme = CDERRORMYCARENETschemes.CD_ERROR, url = url)),
+            cgdRequest()
+        ).single()
+
+        assertThat(error.uid).isEqualTo("180")
+        assertThat(error.path).isEqualTo("/SendTransactionRequest/kmehrmessage/folder/transaction[cgd]/item[requestor]")
+    }
+
+    /** CE 276 names a missing patientpaid: the parent resolves, the entry is reached, `value` stays empty. */
+    @Test
+    fun aMissingPatientPaidInTheCgdReachesItsEntryWithoutValue() {
+        val url =
+            """*[local-name() = 'SendTransactionRequest']/*[local-name() = 'kmehrmessage']/*[local-name() = 'folder']/*[local-name() = 'transaction'][*[local-name() = 'cd'][text()="cgd"]][not(*[local-name() = 'item'][*[local-name() = 'cd'][text()="patientpaid"]])]"""
+        val error = service.errorsOf(
+            listOf(acknowledgeError(code = "276", scheme = CDERRORMYCARENETschemes.CD_ERROR, url = url)),
+            cgdRequest(withPatientPaid = false)
+        ).single()
+
+        assertThat(error.uid).isEqualTo("176")
+        assertThat(error.path).isEqualTo("/SendTransactionRequest/kmehrmessage/folder/transaction[cgd]")
+        assertThat(error.value).isNull()
     }
 }

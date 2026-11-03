@@ -240,7 +240,8 @@ class ErrorCatalogueReachabilityTest {
         }.filterValues { it > 0 }
 
         assertThat(counts).containsOnly(
-            entry("eAttestErrors", 27),
+            // 27, plus CE 230 and 276-278 from BE-KERR-EAT3 v03r04, all four naming a missing element.
+            entry("eAttestErrors", 31),
             entry("ConsultTarifErrors", 11),
             entry("MemberDataErrors", 8),
             entry("ConsultTarificationMediprimaErrors", 1)

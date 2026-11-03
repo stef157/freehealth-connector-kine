@@ -1294,7 +1294,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
             val result = mutableSetOf<MycarenetError>()
             val curratedUrl = if (url.startsWith("/")) url else "/" + url
             val resolvableUrl = ErrorLocationPath.resolvableSteps(curratedUrl)
-            val namesAMissingElement = resolvableUrl != curratedUrl
+            val namesAMissingElement = ErrorLocationPath.namesAMissingElement(curratedUrl)
 
             try {
                 val xpath = xPathFactory.newXPath()

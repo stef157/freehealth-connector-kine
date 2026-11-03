@@ -16,5 +16,13 @@ class EAgreementMessage (
     var io: String? = null,
     var appliesTo: String? = null,
     var reference: String? = null,
-    var valueHash: String? = null
+    var valueHash: String? = null,
+    /**
+     * The XAdES of the insurer's message — `EncryptedKnownContent.xades` ([xades]) and the genericAsync
+     * `MsgResponse.xadesT` ([xadesT]). The CIN workbook gives EAGREEMENT-RSP a probative force of
+     * "Xades-T without Manifest"; which of the two MyCareNet fills has not been observed yet, so both are
+     * returned as they arrive (base64 in JSON), unverified. Null on a message that could not be decoded.
+     */
+    var xades: ByteArray? = null,
+    var xadesT: ByteArray? = null
 )

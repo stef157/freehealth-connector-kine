@@ -628,7 +628,8 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 eAgreementMessageList = response.`return`.msgResponses?.map { msgResponse ->
                     // A message that cannot be decoded is reported on its own instead of failing the whole mailbox
                     try {
-                        val decryptedPayload = AsyncPayloadDecoder.decodeDetail(msgResponse.detail, crypto)
+                        val decoded = AsyncPayloadDecoder.decodeDetailWithSeal(msgResponse.detail, crypto)
+                        val decryptedPayload = decoded.payload
                         val decryptedPayloadXml: String? = String(decryptedPayload, Charsets.UTF_8)
                         val responseList = AsyncPayloadDecoder.unmarshal(decryptedPayload, ResponseList::class.java)
                         listOfEagreementDecryptedResponseContent.add(ConnectorXmlUtils.toString(responseList))
@@ -695,6 +696,8 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                                 appliesTo = null,
                                 complete = null,
                                 io = null,
+                            xades = decoded.xades,
+                            xadesT = msgResponse.xadesT?.value,
                             eagreementResponse = if (mappedEagreementResponses.isNotEmpty()) {
                                 mappedEagreementResponses
                             } else {

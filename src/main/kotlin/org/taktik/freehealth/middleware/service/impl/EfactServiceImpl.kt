@@ -421,6 +421,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
                         tAck = r.tAck
                         xades = Base64.encodeBase64String(r.xadesT.value)
                         hashValue = Base64.encodeBase64String(r.tAck.value)
+                        messageReference = r.tAck.reference
                     } catch (e: IOException) {}
                 }
             }
@@ -531,6 +532,7 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
                         tAck = r.tAck
                         xades = Base64.encodeBase64String(r.xadesT.value)
                         hashValue = Base64.encodeBase64String(r.tAck.value)
+                        messageReference = r.tAck.reference
                     } catch (e: IOException) {}
                 }
             }

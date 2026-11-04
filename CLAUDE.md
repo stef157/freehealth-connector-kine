@@ -369,6 +369,14 @@ Hard-won details:
   `502 — SOA-02001: Service is not available. Please contact service desk.` (platform outage, nothing to fix locally).
   Raising log levels does not help: the SOAP body is not logged even at DEBUG.
 
+**The amount charged to the patient is `codes[].patientPaid`** (`97baff51d`, a `BigDecimal`: send it as a string,
+`"23.63"`). It is written as the CGD's `patientpaid` item, and the CGA's is their sum — never a figure of its own,
+since CE 264 rejects any gap. Absent, the connector writes what it always did, `reimbursement + reglementarySupplement`
+rounded to the cent, which is why kine-data used to carry the patient's amount in `reimbursement`. A negative or
+sub-cent amount is a 400 before the request is built. **kine-data sends both** (`2af02305`): images older than
+`97baff51d` ignore `patientPaid`, so `reimbursement` must keep the amount until `deploy/fhc/docker-compose.yml`
+pins one that has it — zeroing it earlier writes `patientpaid = 0.00` into a signed attestation.
+
 **Reading an eAttest error.** The catalogue entries carry the CIN message, the `uid`, `locFr` and a readable
 `path` (`/SendTransactionRequest/kmehrmessage/folder/transaction[cga]/author/hcparty/id`), plus `value`, the
 offending node **of your own request** — an SSIN, a NIHII, a date, so don't show it to the practitioner
@@ -729,6 +737,13 @@ the empty `wsa:To` the CIN catalogue requires and stops asking for tACKs — eAg
 channel holds none of ours, and asking without confirming hits the *Repetitive call limitation*. The official
 packaging ships a distinct `business-mycareneteagreementasyncv2` module for reference.
 
+**Each async message carries the insurer's seal** (`549c5aa2f`): `xades` (`EncryptedKnownContent.xades`) and
+`xadesT` (the genericAsync `MsgResponse.xadesT`), base64, unverified. That is the proof of the medical adviser's
+decision, which arrives on this channel; the decoder used to drop it (`AsyncPayloadDecoder.decodeDetailWithSeal`
+now keeps it — `decodeDetail`, which MDA calls, is unchanged). The CIN workbook gives EAGREEMENT-RSP "Xades-T without
+Manifest", but **which of the two fields MyCareNet fills is not observed yet**: read the first real relève.
+kine-data's registry entry `fhc:eagreement_inbound_xades_not_exposed` names the gap this closes.
+
 ### eFact
 
 Transport works: `GET /efact/{nihii}/{language}` (GenAsync message pull) returns `200 []` with a physiotherapist
@@ -851,7 +866,10 @@ Both work out of the box with a physiotherapist token, no special configuration:
   physiotherapists over 4 pages).
 - `GET /ehboxV3` returns the box summary (`boxId`, `quality`, `nbrMessagesInStandBy`, `currentSize`/`maxSize`);
   `GET /ehboxV3/{boxId}?limit=n` lists messages, with `boxId` one of `INBOX`, `SENTBOX`, `BININBOX`. Errors surface in
-  the response's own `error` field rather than as an HTTP status.
+  the response's own `error` field rather than as an HTTP status. **A listed message is never dropped**
+  (`d2c2a7e90`): one that cannot be read comes back as an `ErrorMessage` carrying its `id` and an `errorCode` —
+  `READ_ERROR`, `UNSUPPORTED_MESSAGE` or `DECRYPT_ERROR` — so it can still be moved or deleted; the failure is
+  logged with the id only and reported to Sentry (`channel=ehbox-list`).
 
 **NIHII mismatch to be aware of**: the SAML token advertises `…501` in `nihii:physiotherapist:nihii11` while the
 address book returns `…527` for the same person (same 8-digit root, different qualification suffix). eAttest accepted

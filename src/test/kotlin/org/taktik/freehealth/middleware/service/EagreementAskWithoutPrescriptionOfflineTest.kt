@@ -152,4 +152,13 @@ class EagreementAskWithoutPrescriptionOfflineTest {
         assertThatThrownBy { argue(prescription = "JVBERi0=", prescriber = "00000000004", prescriptionDate = null) }
             .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("prescriptionDate")
     }
+
+    /** All or nothing, the other way round too: a prescriber without prescription1 would leave orphan Practitioner/2 entries. */
+    @Test
+    fun anArgueWithAPrescriberButNoPrescriptionIsRefused() {
+        assertThatThrownBy { argue(prescription = null, prescriber = "00000000004") }
+            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("requires a prescription1")
+        assertThatThrownBy { argue(prescription = null, prescriber = null, prescriptionDate = DateTime(2026, 5, 9, 0, 0)) }
+            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("requires a prescription1")
+    }
 }

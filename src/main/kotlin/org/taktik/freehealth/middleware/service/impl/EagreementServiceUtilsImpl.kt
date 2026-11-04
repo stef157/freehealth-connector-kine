@@ -670,6 +670,14 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
             requireNotNull(prescriberLastName) { "prescriberLastName is required with a prescription1 attachment" }
             requireNotNull(prescriptionDate) { "prescriptionDate is required with a prescription1 attachment" }
         }
+        // And the other way round: a prescriber without prescription1 would leave Practitioner/2 and
+        // PractitionerRole/2 in the Bundle with nothing pointing at them. All or nothing, as kine-data's gateway
+        // already requires.
+        if (requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE && prescription1 == null) {
+            require(prescriberNihii == null && prescriberFirstName == null && prescriberLastName == null && prescriptionDate == null) {
+                "a prescriber or a prescription date requires a prescription1 attachment"
+            }
+        }
 
         //Service Request 1
         if (!withoutPrescription && (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND)) {

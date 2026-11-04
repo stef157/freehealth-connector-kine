@@ -660,6 +660,17 @@ class EagreementServiceUtilsImpl(): EagreementServiceUtils {
         val withoutPrescription = prescription1 == null &&
             (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE)
 
+        // /argueAgreement no longer requires the prescriber and the prescription date, since an argue may travel
+        // without a prescription. With one, they are still required: the ServiceRequest's requester is
+        // PractitionerRole2, which only exists with a prescriber, and authoredOn would otherwise fall back to
+        // today. A 400 before anything is sent, as the route used to answer.
+        if (requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE && prescription1 != null) {
+            requireNotNull(prescriberNihii) { "prescriberNihii is required with a prescription1 attachment" }
+            requireNotNull(prescriberFirstName) { "prescriberFirstName is required with a prescription1 attachment" }
+            requireNotNull(prescriberLastName) { "prescriberLastName is required with a prescription1 attachment" }
+            requireNotNull(prescriptionDate) { "prescriptionDate is required with a prescription1 attachment" }
+        }
+
         //Service Request 1
         if (!withoutPrescription && (requestType == EagreementServiceImpl.RequestTypeEnum.ASK || requestType == EagreementServiceImpl.RequestTypeEnum.COMPLETE_AGREEMENT || requestType == EagreementServiceImpl.RequestTypeEnum.ARGUE || requestType == EagreementServiceImpl.RequestTypeEnum.EXTEND)) {
             val serviceRequest1 = mapper.createObjectNode()

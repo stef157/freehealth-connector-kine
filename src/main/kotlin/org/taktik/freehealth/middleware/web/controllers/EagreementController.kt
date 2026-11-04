@@ -562,8 +562,12 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
 
     @Operation(
         summary = "Argue an agreement decision (eAgreement v2)",
-        description = "Sends supporting arguments or attachments contesting a decision, identified by insuranceRef."
+        description = "Sends supporting arguments or attachments contesting a decision, identified by insuranceRef. The prescription is optional: without a prescription1 attachment, leave out prescriberNihii, prescriberFirstName, prescriberLastName and prescriptionDate; with one, all four are required."
     )
+    // A claim-argue answers a request for information with free text, a copy of the prescription or another
+    // annex, any one of them (1-FR-RULES-EAGR-KINE, as reported by 57bfa3c45), and Claim.referral is 0..1 there.
+    // The builder has taken an argue without prescription1 since 57bfa3c45; this route still required the
+    // prescriber and the prescription date, so such an argue was a 400 before it reached the builder.
     @PostMapping("/argueAgreement", produces = [MediaType.APPLICATION_JSON_UTF8_VALUE])
     fun argueAgreement(
         @RequestHeader(name = "X-FHC-keystoreId") keystoreId: UUID,
@@ -575,14 +579,14 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
         @RequestParam hcpSsin: String,
         @RequestParam hcpFirstName: String,
         @RequestParam hcpLastName: String,
-        @RequestParam prescriberNihii: String,
-        @RequestParam prescriberFirstName: String,
-        @RequestParam prescriberLastName: String,
+        @RequestParam(required = false) prescriberNihii: String?,
+        @RequestParam(required = false) prescriberFirstName: String?,
+        @RequestParam(required = false) prescriberLastName: String?,
         @RequestParam patientFirstName: String,
         @RequestParam patientLastName: String,
         @RequestParam patientGender: String,
         @RequestParam insuranceRef: String,
-        @RequestParam prescriptionDate: Int,
+        @RequestParam(required = false) prescriptionDate: Int?,
         @RequestParam(required = false) sctCode: String?,
         @RequestParam(required = false) sctDisplay: String?,
         @RequestParam(required = false) patientSsin: String?,
@@ -630,7 +634,7 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
             numberOfSessionForPrescription1 = numberOfSessionForPrescription1,
             numberOfSessionForPrescription2 = numberOfSessionForPrescription2,
             sctCode = sctCode,
-            prescriptionDate = formatter.parseDateTime(prescriptionDate.toString()),
+            prescriptionDate = prescriptionDate?.let { formatter.parseDateTime(it.toString()) },
             sctDisplay = sctDisplay,
             attachments = attachments?.filter { it.type != "prescription1" && it.type != "prescription2" }
         )

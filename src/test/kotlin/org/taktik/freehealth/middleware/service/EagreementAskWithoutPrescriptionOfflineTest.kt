@@ -21,7 +21,8 @@ class EagreementAskWithoutPrescriptionOfflineTest {
         prescriber: String?,
         requestType: EagreementServiceImpl.RequestTypeEnum = EagreementServiceImpl.RequestTypeEnum.ASK,
         eventCode: String = "claim-ask",
-        insuranceRef: String? = null
+        insuranceRef: String? = null,
+        prescriptionDate: DateTime? = prescription?.let { DateTime(2026, 5, 9, 0, 0) }
     ): ObjectNode = utils.getBundleJSON(
         requestType = requestType,
         messageFocusReference = "Claim/Claim1",
@@ -55,7 +56,7 @@ class EagreementAskWithoutPrescriptionOfflineTest {
         sctDisplay = prescription?.let { "Physical therapy procedure" },
         subTypeCode = null,
         attachments = null,
-        prescriptionDate = prescription?.let { DateTime(2026, 5, 9, 0, 0) }
+        prescriptionDate = prescriptionDate
     )!!
 
     private fun resources(bundle: ObjectNode) =
@@ -83,11 +84,16 @@ class EagreementAskWithoutPrescriptionOfflineTest {
         assertThat(claim.get("referral").get("reference").asText()).isEqualTo(serviceRequest.get("fullUrl").asText())
     }
 
-    private fun argue(prescription: String?, prescriber: String?) = ask(
+    private fun argue(
+        prescription: String?,
+        prescriber: String?,
+        prescriptionDate: DateTime? = prescription?.let { DateTime(2026, 5, 9, 0, 0) }
+    ) = ask(
         prescription, prescriber,
         requestType = EagreementServiceImpl.RequestTypeEnum.ARGUE,
         eventCode = "claim-argue",
-        insuranceRef = "12345678901234567890"
+        insuranceRef = "12345678901234567890",
+        prescriptionDate = prescriptionDate
     )
 
     /**
@@ -128,5 +134,22 @@ class EagreementAskWithoutPrescriptionOfflineTest {
                 insuranceRef = "12345678901234567890"
             )
         }.isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("prescription1")
+    }
+
+    /**
+     * /argueAgreement no longer requires the prescriber nor the prescription date. With a prescription1 they are
+     * still required — by the builder now, before anything is sent: the ServiceRequest's requester is
+     * PractitionerRole2, which only exists with a prescriber, and authoredOn would otherwise become today.
+     */
+    @Test
+    fun anArgueWithAPrescriptionButNoPrescriberIsRefused() {
+        assertThatThrownBy { argue(prescription = "JVBERi0=", prescriber = null) }
+            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("prescriberNihii")
+    }
+
+    @Test
+    fun anArgueWithAPrescriptionButNoPrescriptionDateIsRefused() {
+        assertThatThrownBy { argue(prescription = "JVBERi0=", prescriber = "00000000004", prescriptionDate = null) }
+            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("prescriptionDate")
     }
 }

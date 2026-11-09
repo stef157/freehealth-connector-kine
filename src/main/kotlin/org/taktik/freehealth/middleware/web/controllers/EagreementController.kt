@@ -23,6 +23,7 @@ import org.taktik.freehealth.middleware.service.impl.EagreementServiceImpl
 import java.util.*
 import jakarta.servlet.http.HttpServletRequest
 import org.taktik.connector.technical.exception.MarshallingException
+import org.taktik.freehealth.middleware.dto.ExceptionDto
 import org.taktik.freehealth.middleware.web.ExceptionHandlers
 
 /**
@@ -60,11 +61,12 @@ class EagreementController(val eagreementService: EagreementService, val mapper:
     fun handleMarshallingException(req: HttpServletRequest, ex: MarshallingException) =
         ExceptionHandlers().handleMarshallingException(req, ex)
 
-    @ResponseStatus(HttpStatus.BAD_GATEWAY)
+    // Still a 502, but the body is the advice's JSON, which carries the request and the fault envelope
+    // (ExceptionDto.mycarenetConversation). A fault string alone left a refused call — SOA-01002 — with nothing to
+    // debug and nothing to show the CIN. The fault string stays the `message`.
     @ExceptionHandler(jakarta.xml.ws.soap.SOAPFaultException::class)
-    @ResponseBody
-    fun handleBadRequest(req: HttpServletRequest, ex: jakarta.xml.ws.soap.SOAPFaultException): String =
-        ex.message ?: "unknown reason"
+    fun handleSoapFault(req: HttpServletRequest, ex: jakarta.xml.ws.soap.SOAPFaultException) =
+        ExceptionDto(HttpStatus.BAD_GATEWAY, ex, req.servletPath).toResponseEntity()
 
     data class Attachment(
         val type: String,

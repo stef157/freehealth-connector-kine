@@ -945,7 +945,15 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   `SoapConversationLogger`. Until 10/2026 it did not (dropped in `2ecfc2748`, 2020), so every service that writes
   `response.soapRequest` — the MDA routes of `712cfcbfa` included — answered `null`. Since the fix that field holds
   the signed envelope, `CommonInput/Origin/Package/License` with it: a client that stores the answer must redact
-  `<License>`. A SOAP fault still returns no request (`NoRetryInvokeStrategy`), since `asObject` throws first.
+  `<License>`. **A SOAP fault now keeps both envelopes (09/11/2026)**: `GenericResponse.getSOAPException()`
+  throws a `SoapConversationFaultException` — a `SOAPFaultException` subclass, so every existing `catch` holds —
+  carrying the request that left and the fault that came back, and `ExceptionDto` returns them as
+  `mycarenetConversation` in the error body, wherever the fault sits in the cause chain (eFact rethrows it as
+  `IllegalStateException(e)`). `EagreementController`'s own fault handler answers that JSON too, still a 502;
+  it used to answer the fault string alone, so a refused call (SOA-01002) left the client nothing to archive.
+  The envelopes never reach `getMessage()` (logs, Sentry); the request carries the licence in clear, as above.
+  Still uncovered: a fault raised by a handler (`SchemaValidatorHandler`, `SoapActionHandler`), a non-SOAP reply
+  and a timeout — no fault envelope exists. `SoapFaultConversationOfflineTest`.
   `AbstractWsSenderSoapRequestOfflineTest` checks the bytes the server received.
   `ConnectionTimeOutHandlerOfflineTest` checks the four shipped files, so an endpoint URL changed without its key
   turns it red.

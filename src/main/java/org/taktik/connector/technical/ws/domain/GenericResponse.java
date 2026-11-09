@@ -126,7 +126,9 @@ public class GenericResponse {
                LOG.debug("Unable to dump SOAPFault. Reason [{}]", var3.getMessage(), var3);
             }
 
-            throw new SOAPFaultException(fault);
+            // The conversation travels with the fault: the request and the fault envelope are still here, and a
+            // bare SOAPFaultException would drop both (SoapConversationFaultException says why it matters).
+            throw new SoapConversationFaultException(fault, this.request, this.message);
          }
       } else {
          throw new SOAPException("No message SOAPmessage recieved");

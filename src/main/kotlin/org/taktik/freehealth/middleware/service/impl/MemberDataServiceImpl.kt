@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.service.impl
 
+import org.taktik.connector.technical.ws.domain.withTransactionRequest
 import be.cin.encrypted.BusinessContent
 import be.cin.encrypted.EncryptedKnownContent
 import be.cin.mycarenet.esb.common.v2.CommonInput
@@ -293,7 +294,9 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         // no xades needed for MDA async
         val post = BuilderFactory.getRequestObjectBuilder("mda")
             .buildPostRequest(ci, SendRequestMapper.mapBlobToCinBlob(blob), null)
-        val postResponse = genAsyncService.postRequest(samlToken, post, postHeader)
+        val postResponse = withTransactionRequest({ MarshallerHelper(Post::class.java, Post::class.java).toXMLByteArray(post).toString(Charsets.UTF_8) }) {
+            genAsyncService.postRequest(samlToken, post, postHeader)
+        }
         return GenAsyncResponse().apply {
             result = postResponse.`return`.resultMajor == "urn:nip:tack:result:major:success"
             this.tack = postResponse.`return`
@@ -715,13 +718,17 @@ class MemberDataServiceImpl(val stsService: STSService, keyDepotService: KeyDepo
         }
         MemberDataXmlValidatorImpl().validate(request)
 
-        val consultMemberData = memberDataService.consultMemberData(samlToken, request)
+        // Built before the call (it only marshals `request`), so a fault carries the same piece as a success.
         val marshallerHelper = MarshallerHelper(MemberDataConsultationRequest::class.java, MemberDataConsultationRequest::class.java)
         val xmlRequest = marshallerHelper.toXMLByteArray(request)
 
         val unencryptedXmlRequest = marshallerHelper.toObject(xmlRequest)?.apply {
             this.detail = unEncryptedQuery?.let { aqb -> BlobMapper.mapBlobTypefromBlob(blobBuilder.build(aqb, "none", detailId, "text/xml", "MDA")) }
         }?.let { marshallerHelper.toXMLByteArray(it) }
+
+        val consultMemberData = withTransactionRequest({ (unencryptedXmlRequest ?: xmlRequest).toString(Charsets.UTF_8) }) {
+            memberDataService.consultMemberData(samlToken, request)
+        }
 
         return ResponseObjectBuilderImpl().handleConsultationResponse(consultMemberData, crypto)?.let {
             val code1 = it.response.status.statusCode?.value

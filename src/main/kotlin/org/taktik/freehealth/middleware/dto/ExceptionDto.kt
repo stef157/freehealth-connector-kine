@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.http.HttpStatus
 import org.taktik.connector.technical.ws.domain.SoapConversationFaultException
+import org.taktik.connector.technical.ws.domain.soapConversationFaultIn
 import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetConversation
 import org.springframework.http.ResponseEntity
 import java.util.*
@@ -18,7 +19,8 @@ class ExceptionDto(
     /**
      * The envelope that left and the fault that came back, when the error is a SOAP fault from eHealth
      * ([SoapConversationFaultException], found anywhere in the cause chain). Absent otherwise, so every other error
-     * body keeps its shape. ⚠️ `soapRequest` carries the CIN licence in clear, as on a success.
+     * body keeps its shape. `transactionRequest` is there when the service attached it (`withTransactionRequest`).
+     * ⚠️ `soapRequest` carries the CIN licence in clear, as on a success, and eAgreement's `transactionRequest` too.
      */
     @field:JsonInclude(JsonInclude.Include.NON_NULL)
     val mycarenetConversation: MycarenetConversation? = null
@@ -27,17 +29,14 @@ class ExceptionDto(
         private const val DEFAULT_EXCEPTION_MESSAGE = "unknown reason"
 
         /** The conversation of the first [SoapConversationFaultException] in the cause chain, if any. */
-        fun conversationOf(exception: Throwable): MycarenetConversation? {
-            val seen = mutableSetOf<Throwable>()
-            var current: Throwable? = exception
-            while (current != null && seen.add(current)) {
-                if (current is SoapConversationFaultException) {
-                    return MycarenetConversation(soapRequest = current.soapRequest, soapResponse = current.soapResponse)
-                }
-                current = current.cause
+        fun conversationOf(exception: Throwable): MycarenetConversation? =
+            soapConversationFaultIn(exception)?.let {
+                MycarenetConversation(
+                    transactionRequest = it.transactionRequest,
+                    soapRequest = it.soapRequest,
+                    soapResponse = it.soapResponse
+                )
             }
-            return null
-        }
     }
 
     constructor(status: HttpStatus, exception: Exception, path: String?) :

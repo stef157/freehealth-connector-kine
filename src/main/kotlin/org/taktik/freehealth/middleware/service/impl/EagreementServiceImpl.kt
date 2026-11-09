@@ -1,5 +1,6 @@
 package org.taktik.freehealth.middleware.service.impl
 
+import org.taktik.connector.technical.ws.domain.withTransactionRequest
 import be.cin.encrypted.BusinessContent
 import be.cin.encrypted.EncryptedKnownContent
 import be.cin.mycarenet.esb.common.v2.OrigineType
@@ -342,7 +343,9 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             }
 
             try {
-                val agreementResponse: AskAgreementResponse? =freehealthAgreementService.askAgreement(samlToken, ObjectFactory().createAskAgreementRequest(askAgreementRequest).value)
+                val agreementResponse: AskAgreementResponse? =withTransactionRequest({ transactionRequestXml(agreementVersion(), askAgreementRequest) }) {
+                    freehealthAgreementService.askAgreement(samlToken, ObjectFactory().createAskAgreementRequest(askAgreementRequest).value)
+                }
 
                 val blobType = agreementResponse?.`return`?.detail
                 val blob = BlobMapper.mapBlobfromBlobType(blobType!!)
@@ -526,7 +529,9 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             }
 
             try {
-                val consultAgreementResponse: ConsultAgreementResponse? = freehealthAgreementService.consultAgreement(samlToken, ObjectFactory().createConsultAgreementRequest(consultAgreementRequest).value)
+                val consultAgreementResponse: ConsultAgreementResponse? = withTransactionRequest({ transactionRequestXml(agreementVersion(), consultAgreementRequest) }) {
+                    freehealthAgreementService.consultAgreement(samlToken, ObjectFactory().createConsultAgreementRequest(consultAgreementRequest).value)
+                }
 
                 val blobType = consultAgreementResponse?.`return`?.detail
                 val blob = BlobMapper.mapBlobfromBlobType(blobType!!)

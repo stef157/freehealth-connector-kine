@@ -1,6 +1,7 @@
 package org.taktik.freehealth.middleware.service.impl
 
 //import org.taktik.freehealth.middleware.format.efact.BelgianInsuranceInvoicingFormatReader
+import org.taktik.connector.technical.ws.domain.withTransactionRequest
 import be.cin.mycarenet.esb.common.v2.CareProviderType
 import be.cin.mycarenet.esb.common.v2.CommonInput
 import be.cin.mycarenet.esb.common.v2.IdType
@@ -298,7 +299,9 @@ class EfactServiceImpl(private val stsService: STSService, private val mapper: M
             throw IllegalStateException(e)
         }
 
-        val postResponse = if(isMediprima) genAsyncServiceMediprima.postRequest(samlToken, post, header) else genAsyncService.postRequest(samlToken, post, header)
+        val postResponse = withTransactionRequest({ MarshallerHelper(Post::class.java, Post::class.java).toXMLByteArray(post).toString(Charsets.UTF_8) }) {
+            if(isMediprima) genAsyncServiceMediprima.postRequest(samlToken, post, header) else genAsyncService.postRequest(samlToken, post, header)
+        }
 
         val tack = postResponse.getReturn()
         val success = tack.resultMajor != null && tack.resultMajor == "urn:nip:tack:result:major:success"

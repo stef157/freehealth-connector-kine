@@ -20,6 +20,7 @@
 
 package org.taktik.freehealth.middleware.service.impl
 
+import org.taktik.connector.technical.ws.domain.withTransactionRequest
 import be.cin.encrypted.BusinessContent
 import be.cin.encrypted.EncryptedKnownContent
 import be.fgov.ehealth.etee.crypto.utils.KeyManager
@@ -302,7 +303,9 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                 this.xades = BlobUtil.generateXades(credential, this.detail, "eattest")
             }
 
-            val cancelAttestationResponse = freehealthEattestService.cancelAttestion(samlToken, cancelAttestationRequest)
+            val cancelAttestationResponse = withTransactionRequest({ MarshallerHelper(SendTransactionRequest::class.java, SendTransactionRequest::class.java).toXMLByteArray(sendTransactionRequest).toString(Charsets.UTF_8) }) {
+                freehealthEattestService.cancelAttestion(samlToken, cancelAttestationRequest)
+            }
             val blobType = cancelAttestationResponse.`return`.detail
             val blob = BlobMapper.mapBlobfromBlobType(blobType)
 
@@ -543,7 +546,9 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                 this.detail = BlobMapper.mapBlobTypefromBlob(blob)
             }
 
-            val sendAttestationResponse = freehealthEattestService.sendAttestion(samlToken, sendAttestationRequest)
+            val sendAttestationResponse = withTransactionRequest({ MarshallerHelper(SendTransactionRequest::class.java, SendTransactionRequest::class.java).toXMLByteArray(sendTransactionRequest).toString(Charsets.UTF_8) }) {
+                freehealthEattestService.sendAttestion(samlToken, sendAttestationRequest)
+            }
 
             val blobType = sendAttestationResponse.`return`.detail
             val blob = BlobMapper.mapBlobfromBlobType(blobType)

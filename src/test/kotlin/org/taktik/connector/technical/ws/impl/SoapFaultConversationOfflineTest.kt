@@ -29,6 +29,7 @@ import org.junit.Test
 import org.springframework.http.HttpStatus
 import org.taktik.connector.technical.ws.domain.GenericRequest
 import org.taktik.connector.technical.ws.domain.SoapConversationFaultException
+import org.taktik.connector.technical.ws.domain.withTransactionRequest
 import org.taktik.freehealth.middleware.dto.ExceptionDto
 import java.net.InetSocketAddress
 
@@ -114,6 +115,55 @@ class SoapFaultConversationOfflineTest {
         assertThat(json["status"].asInt()).isEqualTo(502)
         assertThat(json["mycarenetConversation"]["soapRequest"].asText()).contains("request-sentinel-4b1d")
         assertThat(json["mycarenetConversation"]["soapResponse"].asText()).contains("fault-sentinel-7c2e")
+    }
+
+    /**
+     * The business request the service built, attached on the way up even when the fault arrives wrapped — the piece
+     * the dev's error body lacked on 09/11/2026 (`transactionRequest: null` beside both envelopes).
+     */
+    @Test
+    fun theServiceAttachesItsBusinessRequestToAWrappedFault() {
+        val thrown = catchThrowable {
+            withTransactionRequest({ "<business>transaction-sentinel-9e3a</business>" }) {
+                // A connector layer that wraps the fault, as a proxy or `TechnicalConnectorException` would.
+                throw IllegalStateException(faultFromServer())
+            }
+        }
+
+        assertThat(thrown).isInstanceOf(IllegalStateException::class.java)
+        assertThat(thrown.toString()).doesNotContain("transaction-sentinel-9e3a")
+        assertThat(thrown.cause!!.message).isEqualTo("SOA-01002: Service call not authorized.")
+        assertThat(thrown.cause.toString()).doesNotContain("transaction-sentinel-9e3a")
+
+        val json = ObjectMapper().readTree(
+            ObjectMapper().writeValueAsString(ExceptionDto(HttpStatus.BAD_GATEWAY, thrown as Exception, "/eagreement/consultList"))
+        )
+        val conversation = json["mycarenetConversation"]
+        assertThat(conversation["transactionRequest"].asText()).isEqualTo("<business>transaction-sentinel-9e3a</business>")
+        assertThat(conversation["soapRequest"].asText()).contains("request-sentinel-4b1d")
+        assertThat(conversation["soapResponse"].asText()).contains("fault-sentinel-7c2e")
+    }
+
+    @Test
+    fun aRequestThatCannotBeBuiltNeverHidesTheFault() {
+        val thrown = catchThrowable {
+            withTransactionRequest({ throw IllegalArgumentException("marshalling failed") }) { faultFromServer().let { throw it } }
+        }
+
+        assertThat(thrown).isInstanceOf(SoapConversationFaultException::class.java)
+        assertThat((thrown as SoapConversationFaultException).transactionRequest).isNull()
+        assertThat(thrown.soapRequest).contains("request-sentinel-4b1d")
+    }
+
+    @Test
+    fun anErrorThatIsNotAFaultNeverBuildsTheRequest() {
+        var built = false
+        val thrown = catchThrowable {
+            withTransactionRequest({ built = true; "<business/>" }) { throw IllegalStateException("boom") }
+        }
+
+        assertThat(thrown).hasMessage("boom")
+        assertThat(built).isFalse()
     }
 
     @Test

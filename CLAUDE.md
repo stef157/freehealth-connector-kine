@@ -952,6 +952,13 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   `IllegalStateException(e)`). `EagreementController`'s own fault handler answers that JSON too, still a 502;
   it used to answer the fault string alone, so a refused call (SOA-01002) left the client nothing to archive.
   The envelopes never reach `getMessage()` (logs, Sentry); the request carries the licence in clear, as above.
+  **The business request too, since the same evening**: measured on the dev, the body had both envelopes and
+  `transactionRequest: null`, because each service set it on its success path only. `withTransactionRequest`
+  (same package) wraps the send of eAgreement ask (argue, cancel, complete, extend go through it) and consult,
+  eAttest V3 send and cancel, eFact `sendBatch` and MemberData post and consult, with the success path's very
+  expression; it attaches the piece to the fault found in the cause chain and rethrows the same throwable.
+  eAgreement's `transactionRequest` holds the `CommonInput`, licence included. No test goes through a service
+  (constructors too heavy): the helper is tested against a loopback fault, wrapped.
   Still uncovered: a fault raised by a handler (`SchemaValidatorHandler`, `SoapActionHandler`), a non-SOAP reply
   and a timeout — no fault envelope exists. `SoapFaultConversationOfflineTest`.
   `AbstractWsSenderSoapRequestOfflineTest` checks the bytes the server received.

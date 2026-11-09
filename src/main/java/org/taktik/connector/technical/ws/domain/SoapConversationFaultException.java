@@ -17,7 +17,8 @@ import jakarta.xml.ws.soap.SOAPFaultException;
  * A subclass, so every existing `catch (SOAPFaultException)` keeps working unchanged.
  *
  * ⚠️ `getSoapRequest()` is the envelope that left, and it carries the CIN licence in clear, exactly like
- * `mycarenetConversation.soapRequest` on a success. The envelopes are **never** part of `getMessage()` or
+ * `mycarenetConversation.soapRequest` on a success — and so does `getTransactionRequest()` on eAgreement, whose
+ * business request holds the `CommonInput`. The envelopes are **never** part of `getMessage()` or
  * `toString()`: those reach logs and Sentry. A client that stores them must redact `<License>`.
  */
 public class SoapConversationFaultException extends SOAPFaultException {
@@ -25,6 +26,11 @@ public class SoapConversationFaultException extends SOAPFaultException {
 
    private final transient String soapRequest;
    private final transient String soapResponse;
+   /**
+    * The business request before encryption, as the success path records it in `transactionRequest`. Only the
+    * service that built it knows it, so it is attached on the way up ({@code withTransactionRequest}), once.
+    */
+   private transient volatile String transactionRequest;
 
    public SoapConversationFaultException(SOAPFault fault, SOAPMessage request, SOAPMessage response) {
       super(fault);
@@ -40,6 +46,18 @@ public class SoapConversationFaultException extends SOAPFaultException {
    /** The fault envelope that came back. */
    public String getSoapResponse() {
       return soapResponse;
+   }
+
+   /** The business request before encryption, or null when no service attached it. */
+   public String getTransactionRequest() {
+      return transactionRequest;
+   }
+
+   /** Attaches the business request, unless one is already there: the innermost service built it. */
+   public void attachTransactionRequest(String transactionRequest) {
+      if (this.transactionRequest == null) {
+         this.transactionRequest = transactionRequest;
+      }
    }
 
    private static String serialize(SOAPMessage message) {

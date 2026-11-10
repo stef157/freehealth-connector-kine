@@ -833,10 +833,13 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 }
                             }
                         },
-                        attest.codes.sumBy {
+                        // Absent unless a code states one: FR-KLAY-EAT3-ALL v03r04 makes the zone mandatory for the
+                        // physician sectors only (they state 0.0), "n'est pas présente" for the others. The total stays
+                        // the sum of the CGD supplements (CE 265).
+                        attest.codes.takeIf { codes -> codes.any { it.doctorSupplement != null } }?.sumBy {
                            Math.round((it.doctorSupplement ?: 0.0) * 100)
                                .toInt()
-                        }.let {
+                        }?.let {
                            ItemType().apply {
                                ids.add(IDKMEHR().apply {
                                    s = IDKMEHRschemes.ID_KMEHR; sv = "1.0"; value =
@@ -1022,7 +1025,8 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                             }
                                     }
                                 }
-                            }, ItemType().apply {
+                            }, code.doctorSupplement?.let { doctorSupplement -> ItemType().apply {
+                                // Absent when the code states none — see the CGA's supplement above.
                                 ids.add(IDKMEHR().apply {
                                     s = IDKMEHRschemes.ID_KMEHR; sv = "1.0"; value =
                                     (itemId++).toString()
@@ -1033,7 +1037,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                 })
                                 cost = CostType().apply {
                                     decimal =
-                                        BigDecimal.valueOf(code.doctorSupplement ?: 0.0).setScale(2, RoundingMode.CEILING)
+                                        BigDecimal.valueOf(doctorSupplement).setScale(2, RoundingMode.CEILING)
                                     unit = UnitType().apply {
                                         cd =
                                             CDUNIT().apply {
@@ -1042,7 +1046,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                             }
                                     }
                                 }
-                            },decisionReference?.let {
+                            } },decisionReference?.let {
                                 ItemType().apply {
                                     ids.add(IDKMEHR().apply {
                                         s = IDKMEHRschemes.ID_KMEHR; sv = "1.0";
@@ -1118,8 +1122,9 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                                                     CDHCPARTYschemes.CD_HCPARTY; sv = "1.16"; value =
                                                 hcp.cdHcParty
                                             })
-                                            firstname = hcp.firstName ?: ""
-                                            familyname = hcp.lastName ?: ""
+                                            // Optional zones (FR-KHCP-MULT-ALL V01r06 §1.1): absent, never empty.
+                                            firstname = hcp.firstName?.takeIf { it.isNotBlank() }
+                                            familyname = hcp.lastName?.takeIf { it.isNotBlank() }
                                         }
                                     },
                                        ContentType().apply {

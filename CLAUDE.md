@@ -961,6 +961,13 @@ eFact is the exception: it carries no `hcpQuality`, the profession is encoded in
   (constructors too heavy): the helper is tested against a loopback fault, wrapped.
   Still uncovered: a fault raised by a handler (`SchemaValidatorHandler`, `SoapActionHandler`), a non-SOAP reply
   and a timeout — no fault envelope exists. `SoapFaultConversationOfflineTest`.
+  **eAgreement's clear Bundle is `mycarenetConversation.businessRequest`** (13/11/2026): its `transactionRequest`
+  carries the Bundle sealed, so the piece a rejection is about was nowhere — except a `log.info` that printed SSIN and
+  prescription PDF into the container log. The field holds the very bytes that were sealed (one `requestXml` feeds
+  both), on success and on a fault (`withTransactionRequest(…, businessRequest = …)`), and is absent elsewhere. It
+  carries patient data, no licence. The INFO log now says `detailId`, size and `sha256=<8 hex>` of those bytes, the
+  Bundle itself only at DEBUG. medispring's MS-15812 (`c66a6b755`) wanted the same piece but wrote it **into
+  `soapRequest`**, which would have broken the envelope's meaning — hence not merged as is.
   `AbstractWsSenderSoapRequestOfflineTest` checks the bytes the server received.
   `ConnectionTimeOutHandlerOfflineTest` checks the four shipped files, so an endpoint URL changed without its key
   turns it red.

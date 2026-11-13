@@ -19,8 +19,10 @@ class ExceptionDto(
     /**
      * The envelope that left and the fault that came back, when the error is a SOAP fault from eHealth
      * ([SoapConversationFaultException], found anywhere in the cause chain). Absent otherwise, so every other error
-     * body keeps its shape. `transactionRequest` is there when the service attached it (`withTransactionRequest`).
-     * ⚠️ `soapRequest` carries the CIN licence in clear, as on a success, and eAgreement's `transactionRequest` too.
+     * body keeps its shape. `transactionRequest` is there when the service attached it (`withTransactionRequest`), and
+     * `businessRequest` — the content before encryption — where the domain has one (eAgreement's FHIR Bundle).
+     * ⚠️ `soapRequest` carries the CIN licence in clear, as on a success, and eAgreement's `transactionRequest` too;
+     * `businessRequest` carries patient data in clear.
      */
     @field:JsonInclude(JsonInclude.Include.NON_NULL)
     val mycarenetConversation: MycarenetConversation? = null
@@ -35,7 +37,7 @@ class ExceptionDto(
                     transactionRequest = it.transactionRequest,
                     soapRequest = it.soapRequest,
                     soapResponse = it.soapResponse
-                )
+                ).apply { businessRequest = it.businessRequest }
             }
     }
 

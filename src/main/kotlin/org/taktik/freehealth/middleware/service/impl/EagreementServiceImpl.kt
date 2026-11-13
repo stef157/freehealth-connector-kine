@@ -162,6 +162,16 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             ) agreementStartDate else now
 
         /**
+         * The first 8 hex digits of the SHA-256 of the business request: what the INFO log carries instead of the
+         * Bundle, which holds the SSIN and the prescription PDF. Recompute it on `mycarenetConversation.businessRequest`
+         * (UTF-8) to tie an archived answer to its log line.
+         */
+        @JvmStatic
+        fun businessRequestDigest(bytes: ByteArray): String =
+            java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                .take(4).joinToString("") { "%02x".format(it) }
+
+        /**
          * Routing care receiver. The insurer is set whenever the caller gives one — with a registration number,
          * or with the SSIN alone: the routing rules use "NISS + N° mut" to by-pass the intermutualist filter for
          * claim-argue (towards the insurer that issued the WFI). It used to be set only with a registration
@@ -192,6 +202,12 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
     }
 
     private val log = LoggerFactory.getLogger(this.javaClass)
+
+    /** One line at INFO that names the request without its content; the Bundle itself only at DEBUG. */
+    private fun logBusinessRequest(operation: String, detailId: String, bytes: ByteArray) {
+        log.info("eagreement {}: detailId={}, bundle={} bytes, sha256={}", operation, detailId, bytes.size, businessRequestDigest(bytes))
+        log.debug("eagreement {} request: {}", operation, bytes.toString(Charsets.UTF_8))
+    }
 
     private fun generateError(e: AgreementBusinessConnectorException, co: CommonOutput): EAgreementResponse {
         val error = EAgreementResponse()
@@ -258,6 +274,8 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
 
         return extractEtk(credential)?.let {
             val requestBundleJSON = this.agreementServiceUtils.getBundleJSON(requestType, "Claim/Claim1", messageEventSystem, messageEventCode, patientFirstName, patientLastName, patientGender, patientSsin, patientIo, patientIoMembership, hcpNihii, hcpFirstName, hcpLastName, prescriberNihii, prescriberFirstName, prescriberLastName, orgNihii, organizationType, prescription1, prescription2, agreementStartDate, agreementEndDate, agreementType, numberOfSessionForPrescription1, numberOfSessionForPrescription2, insuranceRef, pathologyCode, pathologyStartDate, sctCode, sctDisplay, null, attachments, prescriptionDate) ?: throw IllegalArgumentException("Cannot load fhir")
+            // One source for what is sealed and what is exposed as `businessRequest`: the same bytes by construction.
+            val requestXml = transformXml(convertJsonObjectToXml(requestBundleJSON))
 
             var askAgreementRequest = AskAgreementRequest();
             askAgreementRequest.apply {
@@ -266,13 +284,10 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 val businessContent = BusinessContent().apply { id = detailId }
                 encryptedKnownContent.businessContent = businessContent
 
-                val xmlString = convertJsonObjectToXml(requestBundleJSON)
-                val requestXml = transformXml(xmlString)
-
                 val byteArray = requestXml.toByteArray(Charsets.UTF_8)
                 businessContent.value = byteArray
 
-                log.info("Request is: " + businessContent.value.toString(Charsets.UTF_8))
+                logBusinessRequest("ask", detailId, byteArray)
                 val xmlByteArray = handleEncryption(encryptedKnownContent, credential, crypto, detailId)
 
                 val blob =
@@ -343,7 +358,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             }
 
             try {
-                val agreementResponse: AskAgreementResponse? =withTransactionRequest({ transactionRequestXml(agreementVersion(), askAgreementRequest) }) {
+                val agreementResponse: AskAgreementResponse? =withTransactionRequest({ transactionRequestXml(agreementVersion(), askAgreementRequest) }, { requestXml }) {
                     freehealthAgreementService.askAgreement(samlToken, ObjectFactory().createAskAgreementRequest(askAgreementRequest).value)
                 }
 
@@ -357,7 +372,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
 
                 val xades = decryptedKnownContent!!.xades
 
-                log.info("Response is: " + decryptedKnownContent.businessContent.value.toString(Charsets.UTF_8))
+                log.debug("eagreement response: {}", decryptedKnownContent.businessContent.value.toString(Charsets.UTF_8))
 
                 val responseXML = decryptedKnownContent.businessContent.value.toString(Charsets.UTF_8)
 
@@ -376,6 +391,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     transactionResponse = responseXML
                     agreementResponse.soapResponse?.writeTo(this.soapResponseOutputStream())
                     agreementResponse.soapRequest?.writeTo(this.soapRequestOutputStream())
+                    businessRequest = requestXml
                 }
                 res.content = responseXML.toByteArray(Charsets.UTF_8)
                 res.xades = xades
@@ -443,6 +459,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 agreementEndDate,
                 agreementType
             )
+            val requestXml = transformXml(convertJsonObjectToXml(requestBundleJSON!!))
 
             var consultAgreementRequest = ConsultAgreementRequest()
             consultAgreementRequest.apply {
@@ -451,13 +468,10 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                 val businessContent = BusinessContent().apply { id = detailId }
                 encryptedKnownContent.businessContent = businessContent
 
-                val xmlString = convertJsonObjectToXml(requestBundleJSON!!)
-                val requestXml = transformXml(xmlString)
-
                 val byteArray = requestXml.toByteArray(Charsets.UTF_8)
                 businessContent.value = byteArray
 
-                log.info("Request is: " + businessContent.value.toString(Charsets.UTF_8))
+                logBusinessRequest("consult", detailId, byteArray)
                 val xmlByteArray = handleEncryption(encryptedKnownContent, credential, crypto, detailId)
 
                 val blob =
@@ -529,7 +543,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
             }
 
             try {
-                val consultAgreementResponse: ConsultAgreementResponse? = withTransactionRequest({ transactionRequestXml(agreementVersion(), consultAgreementRequest) }) {
+                val consultAgreementResponse: ConsultAgreementResponse? = withTransactionRequest({ transactionRequestXml(agreementVersion(), consultAgreementRequest) }, { requestXml }) {
                     freehealthAgreementService.consultAgreement(samlToken, ObjectFactory().createConsultAgreementRequest(consultAgreementRequest).value)
                 }
 
@@ -543,7 +557,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
 
                 val xades = decryptedKnownContent!!.xades
 
-                log.info("Response is: " + decryptedKnownContent.businessContent.value.toString(Charsets.UTF_8))
+                log.debug("eagreement response: {}", decryptedKnownContent.businessContent.value.toString(Charsets.UTF_8))
 
                 val responseXML = decryptedKnownContent.businessContent.value.toString(Charsets.UTF_8)
 
@@ -563,6 +577,7 @@ class EagreementServiceImpl(private val stsService: STSService, private val keyD
                     transactionResponse = responseXML
                     consultAgreementResponse.soapResponse?.writeTo(this.soapResponseOutputStream())
                     consultAgreementResponse.soapRequest?.writeTo(this.soapRequestOutputStream())
+                    businessRequest = requestXml
                 }
                 res.content = responseXML.toByteArray(Charsets.UTF_8)
                 res.xades = xades

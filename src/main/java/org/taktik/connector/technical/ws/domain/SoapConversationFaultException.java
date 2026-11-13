@@ -31,6 +31,12 @@ public class SoapConversationFaultException extends SOAPFaultException {
     * service that built it knows it, so it is attached on the way up ({@code withTransactionRequest}), once.
     */
    private transient volatile String transactionRequest;
+   /**
+    * The business content before encryption, where {@code transactionRequest} carries it encrypted (eAgreement's
+    * FHIR Bundle) — the piece the success path records in `mycarenetConversation.businessRequest`. Attached like
+    * {@code transactionRequest}, once.
+    */
+   private transient volatile String businessRequest;
 
    public SoapConversationFaultException(SOAPFault fault, SOAPMessage request, SOAPMessage response) {
       super(fault);
@@ -57,6 +63,18 @@ public class SoapConversationFaultException extends SOAPFaultException {
    public void attachTransactionRequest(String transactionRequest) {
       if (this.transactionRequest == null) {
          this.transactionRequest = transactionRequest;
+      }
+   }
+
+   /** The business content before encryption, or null when no service attached it. */
+   public String getBusinessRequest() {
+      return businessRequest;
+   }
+
+   /** Attaches the business content before encryption, unless one is already there: the innermost service built it. */
+   public void attachBusinessRequest(String businessRequest) {
+      if (this.businessRequest == null) {
+         this.businessRequest = businessRequest;
       }
    }
 

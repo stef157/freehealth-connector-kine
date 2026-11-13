@@ -31,6 +31,7 @@ import org.taktik.connector.technical.ws.domain.GenericRequest
 import org.taktik.connector.technical.ws.domain.SoapConversationFaultException
 import org.taktik.connector.technical.ws.domain.withTransactionRequest
 import org.taktik.freehealth.middleware.dto.ExceptionDto
+import org.taktik.freehealth.middleware.dto.mycarenet.MycarenetConversation
 import java.net.InetSocketAddress
 
 /**
@@ -142,6 +143,54 @@ class SoapFaultConversationOfflineTest {
         assertThat(conversation["transactionRequest"].asText()).isEqualTo("<business>transaction-sentinel-9e3a</business>")
         assertThat(conversation["soapRequest"].asText()).contains("request-sentinel-4b1d")
         assertThat(conversation["soapResponse"].asText()).contains("fault-sentinel-7c2e")
+    }
+
+    /**
+     * eAgreement's piece before encryption (the FHIR Bundle), which `transactionRequest` carries sealed. medispring's
+     * MS-15812 put it in `soapRequest`; here it has its own field and `soapRequest` stays the envelope that left.
+     */
+    @Test
+    fun theServiceAttachesItsContentBeforeEncryptionBesideTheTransactionRequest() {
+        val thrown = catchThrowable {
+            withTransactionRequest({ "<sealed>transaction-sentinel-9e3a</sealed>" }, { "<Bundle>business-sentinel-5f80</Bundle>" }) {
+                throw IllegalStateException(faultFromServer())
+            }
+        }
+
+        assertThat(thrown.toString()).doesNotContain("business-sentinel-5f80")
+        assertThat(thrown.cause.toString()).doesNotContain("business-sentinel-5f80")
+
+        val conversation = ObjectMapper().readTree(
+            ObjectMapper().writeValueAsString(ExceptionDto(HttpStatus.BAD_GATEWAY, thrown as Exception, "/eagreement/askAgreement"))
+        )["mycarenetConversation"]
+        assertThat(conversation["businessRequest"].asText()).isEqualTo("<Bundle>business-sentinel-5f80</Bundle>")
+        assertThat(conversation["transactionRequest"].asText()).isEqualTo("<sealed>transaction-sentinel-9e3a</sealed>")
+        assertThat(conversation["soapRequest"].asText()).contains("request-sentinel-4b1d").doesNotContain("business-sentinel-5f80")
+    }
+
+    @Test
+    fun oneMissingPieceNeverDropsTheOther() {
+        val thrown = catchThrowable {
+            withTransactionRequest({ throw IllegalArgumentException("marshalling failed") }, { "<Bundle/>" }) {
+                faultFromServer().let { throw it }
+            }
+        } as SoapConversationFaultException
+
+        assertThat(thrown.transactionRequest).isNull()
+        assertThat(thrown.businessRequest).isEqualTo("<Bundle/>")
+    }
+
+    @Test
+    fun aDomainWithoutAContentBeforeEncryptionKeepsItsShape() {
+        val thrown = catchThrowable {
+            withTransactionRequest({ "<business/>" }) { faultFromServer().let { throw it } }
+        }
+        val conversation = ObjectMapper().readTree(
+            ObjectMapper().writeValueAsString(ExceptionDto(HttpStatus.BAD_GATEWAY, thrown as Exception, "/efact/batch"))
+        )["mycarenetConversation"]
+
+        assertThat(conversation.has("businessRequest")).isFalse()
+        assertThat(ObjectMapper().readTree(ObjectMapper().writeValueAsString(MycarenetConversation())).has("businessRequest")).isFalse()
     }
 
     @Test

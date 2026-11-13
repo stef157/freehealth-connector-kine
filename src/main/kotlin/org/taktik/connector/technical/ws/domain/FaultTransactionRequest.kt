@@ -13,13 +13,21 @@ package org.taktik.connector.technical.ws.domain
  * - The SAME throwable is rethrown, so the status, the handlers and the message do not move.
  * - [transactionRequest] is computed only on a fault, and a failure to compute it never hides the fault.
  * - Pass the very expression of the success path, so the piece does not depend on the outcome.
+ * - [businessRequest] is the clear content where [transactionRequest] carries it encrypted (eAgreement's FHIR
+ *   Bundle, `mycarenetConversation.businessRequest`); the other domains leave it out. Same rules, independently:
+ *   one piece failing to compute does not drop the other.
  */
-inline fun <T> withTransactionRequest(transactionRequest: () -> String?, call: () -> T): T =
+inline fun <T> withTransactionRequest(
+    transactionRequest: () -> String?,
+    businessRequest: () -> String? = { null },
+    call: () -> T
+): T =
     try {
         call()
     } catch (e: Throwable) {
         soapConversationFaultIn(e)?.let { fault ->
             runCatching(transactionRequest).getOrNull()?.let { fault.attachTransactionRequest(it) }
+            runCatching(businessRequest).getOrNull()?.let { fault.attachBusinessRequest(it) }
         }
         throw e
     }

@@ -308,6 +308,26 @@ scrubber. Environment is derived from
 `SENTRY_ENVIRONMENT` explicitly per host. `SentryReportingOfflineTest` pins all
 of it. No tracing: transaction names would come from URIs.
 
+### New Relic logs and `X-Request-Id`
+
+`newrelic/NewRelicLogAppender.kt`, declared in `logback.xml`, ships **INFO and above** to New Relic's Log API when
+`NEW_RELIC_LICENSE_KEY` is set, and is inert otherwise (the key lives in kine-data's `deploy/fhc/.env`, never here).
+The region follows the key (`eu…` → `log-api.eu.newrelic.com`), `NEW_RELIC_LOG_ENDPOINT` overrides it. Each line
+carries `service.name=fhc` and `environment` = `NEW_RELIC_ENVIRONMENT`, else `SENTRY_ENVIRONMENT` — set it per
+host (`dev` / `production`): other sources (kine-data's PHP, the apps) are meant to share the account under their
+own `service.name`. **Not the New Relic Java agent**: it names transactions after URIs, and `/mda/{ssin}` puts the
+SSIN in the path.
+
+Message and stack trace go through `SentryScrubber`; no argument, and of the MDC only `request.id`. That scrubber
+was written for exception text — it misses a name in a KMEHR element — so a statement that prints a request or a
+response belongs at **DEBUG**: the eAttest `Request is:` lines, MHM, RnConsult, the STS `SAMLResponse` and the
+Recipe XML were lowered for that. Keep it so when adding logs. The queue is bounded and drops rather than
+blocks; `stop()` lets the worker drain instead of interrupting the POST in flight (`NewRelicLogAppenderOfflineTest`).
+
+`web/RequestIdFilter.kt` reads `X-Request-Id`, echoes it on the response and puts it in the MDC; an absent value,
+or one that could carry an identifier (anything `SentryScrubber` would alter, beyond a UUID), is replaced by a
+fresh UUID. Search `request.id:<id>` in New Relic to get every line of one call (`RequestIdFilterOfflineTest`).
+
 ### MyCareNet / CIN licence
 
 Every MyCareNet domain needs a CIN licence (a username + password pair). Services resolve it in this order

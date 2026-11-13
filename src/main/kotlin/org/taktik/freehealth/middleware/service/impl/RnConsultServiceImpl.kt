@@ -232,7 +232,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
 
         return try{
             val searchPersonPhoneticallyResponse = backingPersonService.searchPersonPhonetically(samlToken, searchPersonPhoneticallyRequest)
-            log.info("SearchPersonPhonetically response: "+ ConnectorXmlUtils.toString(searchPersonPhoneticallyResponse))
+            log.debug("SearchPersonPhonetically response: "+ ConnectorXmlUtils.toString(searchPersonPhoneticallyResponse))
 
             RnConsultSearchPersonPhoneticallyResponseDto(
                 id = searchPersonPhoneticallyResponse?.id,
@@ -444,7 +444,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                 error = null
             )
         }catch (ex: SoaErrorException){
-            log.info("Error: "+ConnectorXmlUtils.toString(ex))
+            log.debug("Error: "+ConnectorXmlUtils.toString(ex))
             RnConsultRegisterPersonResponseDto(
                 id = ex.responseTypeV2.id,
                 issueInstant = ex.responseTypeV2.issueInstant,
@@ -459,7 +459,7 @@ class RnConsultServiceImpl(private val stsService: STSService) : RnConsultServic
                 error = ErrorDto(code = ex.errorCode, descr = ex.message)
             )
         }catch (ex: SOAPFaultException){
-            log.info("Error: "+ConnectorXmlUtils.toString(ex))
+            log.debug("Error: "+ConnectorXmlUtils.toString(ex))
             RnConsultRegisterPersonResponseDto(
                 id = null,
                 issueInstant = null,

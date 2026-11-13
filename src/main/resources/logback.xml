@@ -10,6 +10,16 @@
 		</filter>
 	</appender>
 
+	<!-- New Relic Log API: inert without NEW_RELIC_LICENSE_KEY. Scrubbed line by line, INFO and above only. -->
+	<appender name="NEWRELIC" class="org.taktik.freehealth.middleware.newrelic.NewRelicLogAppender">
+		<licenseKey>${NEW_RELIC_LICENSE_KEY:-}</licenseKey>
+		<endpoint>${NEW_RELIC_LOG_ENDPOINT:-}</endpoint>
+		<environment>${NEW_RELIC_ENVIRONMENT:-${SENTRY_ENVIRONMENT:-}}</environment>
+		<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+			<level>INFO</level>
+		</filter>
+	</appender>
+
 	<logger name="be.fgov.ehealth.etee.crypto" level="WARN" />
 	<logger name="be.fgov.ehealth.etee.crypto.decrypt" level="ERROR" />
 
@@ -26,5 +36,6 @@
 
 	<root level="INFO">
 		<appender-ref ref="CONSOLE" />
+		<appender-ref ref="NEWRELIC" />
 	</root>
 </configuration>

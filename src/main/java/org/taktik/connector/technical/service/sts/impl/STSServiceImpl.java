@@ -117,7 +117,7 @@ public class STSServiceImpl extends AbstractSTSService {
          } else if (stsResponse.getElementsByTagName("Assertion").getLength() < 0) {
             String message = "SAMLResponse has a flag succesfull but contains no assertions.";
             LOG.warn(message);
-            LOG.warn("SAMLResponse was: " + SAMLConverter.toXMLString(stsResponse));
+            LOG.debug("SAMLResponse was: " + SAMLConverter.toXMLString(stsResponse));
             LOG.warn("The status of the SAMLResponse is " + status + " [" + SAMLHelper.getStatusMessage(stsResponse));
             TechnicalConnectorExceptionValues errorValue = TechnicalConnectorExceptionValues.INVALID_TOKEN;
             throw new TechnicalConnectorException(errorValue, message);

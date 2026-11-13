@@ -229,7 +229,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                 encryptedKnownContent.businessContent = businessContent
 
                 businessContent.value = requestXml
-                log.info("Request is: " + businessContent.value.toString(Charsets.UTF_8))
+                log.debug("Request is: " + businessContent.value.toString(Charsets.UTF_8))
                 val blob =
                     BlobBuilderFactory.getBlobBuilder("attest")
                         .build(
@@ -463,7 +463,7 @@ class EattestV3ServiceImpl(private val stsService: STSService, private val keyDe
                 encryptedKnownContent.businessContent = businessContent
 
                 businessContent.value = requestXml
-                log.info("Request is: " + businessContent.value.toString(Charsets.UTF_8))
+                log.debug("Request is: " + businessContent.value.toString(Charsets.UTF_8))
                 val xmlByteArray = handleEncryption(encryptedKnownContent, credential, crypto, detailId)
 
                 val blob =

@@ -214,7 +214,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
             this.xades = BlobUtil.generateXades(credential, this.detail, "medicalhousemembership")
         }
 
-        log.info("Sending subscription request {}", ConnectorXmlUtils.toString(sendSubscripionRequest))
+        log.debug("Sending subscription request {}", ConnectorXmlUtils.toString(sendSubscripionRequest))
         MhmXmlValidatorImpl().validate(sendSubscripionRequest)
 
         return try {
@@ -223,7 +223,7 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
 
             val sendSubscriptionResponse = freehealthMhmService.sendSubscription(samlToken, sendSubscripionRequest, "urn:be:fgov:ehealth:mycarenet:medicalHouseMembership:protocol:v1:SendSubscription")
 
-            log.info("Response: " + ConnectorXmlUtils.toString(sendSubscriptionResponse.`return`))
+            log.debug("Response: " + ConnectorXmlUtils.toString(sendSubscriptionResponse.`return`))
 
             val sendTransactionResponse = MarshallerHelper(SendTransactionResponse::class.java, SendTransactionResponse::class.java).toObject(sendSubscriptionResponse.`return`.detail.value)
 
@@ -404,11 +404,11 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
             this.xades = BlobUtil.generateXades(credential, this.detail, "medicalhousemembership")
         }
 
-        log.info("Sending cancel subscription request {}", ConnectorXmlUtils.toString(sendCancelSubscripionRequest))
+        log.debug("Sending cancel subscription request {}", ConnectorXmlUtils.toString(sendCancelSubscripionRequest))
         return try {
         val sendCancelSubscriptionResponse = freehealthMhmService.cancelSubscription(samlToken, sendCancelSubscripionRequest, "urn:be:fgov:ehealth:mycarenet:medicalHouseMembership:protocol:v1:CancelSubscription")
 
-        log.info("Response: "+ConnectorXmlUtils.toString(sendCancelSubscriptionResponse.`return`))
+        log.debug("Response: "+ConnectorXmlUtils.toString(sendCancelSubscriptionResponse.`return`))
 
         val sendTransactionResponse = MarshallerHelper(SendTransactionResponse::class.java, SendTransactionResponse::class.java).toObject(sendCancelSubscriptionResponse.`return`.detail.value)
 
@@ -586,12 +586,12 @@ class MhmServiceImpl(private val stsService: STSService) : MhmService {
             this.xades = BlobUtil.generateXades(credential, this.detail, "medicalhousemembership")
         }
 
-        log.info("Sending notify subscription closure request {}", ConnectorXmlUtils.toString(sendNotifySubscripionClosureRequest))
+        log.debug("Sending notify subscription closure request {}", ConnectorXmlUtils.toString(sendNotifySubscripionClosureRequest))
 
         return try {
             val sendNotifySubscriptionClosureResponse = freehealthMhmService.notifySubscriptionClosure(samlToken, sendNotifySubscripionClosureRequest, "urn:be:fgov:ehealth:mycarenet:medicalHouseMembership:protocol:v1:NotifySubscriptionClosure")
 
-            log.info("Response: " + ConnectorXmlUtils.toString(sendNotifySubscriptionClosureResponse.`return`))
+            log.debug("Response: " + ConnectorXmlUtils.toString(sendNotifySubscriptionClosureResponse.`return`))
 
             val sendTransactionResponse = MarshallerHelper(SendTransactionResponse::class.java, SendTransactionResponse::class.java).toObject(sendNotifySubscriptionClosureResponse.`return`.detail.value)
 
